@@ -150,7 +150,7 @@ impl GDTEntry16Struct {
 		self.LowerBaseAddress = BaseAddress as u16 & 0xFFFF;
 		self.MiddleBaseAddress1 = ((BaseAddress >> 16) & 0xFF) as u8;
 		self.TypeAndLowerFlag = LowerFlags | Type;
-		self.UpperLimitAndUpperFlag = ((Limit >> 16) & 0xFF ) as u8 | UpperFlags;
+		self.UpperLimitAndUpperFlag = ((Limit >> 16) & 0xFF) as u8 | UpperFlags;
 		self.MiddleBaseAddress2 = ((BaseAddress >> 24) & 0xFF) as u8;
 		self.UpperLimitAndUpperFlag = (BaseAddress >> 32) as u8;
 		self.Reserved = 0;
@@ -217,12 +217,12 @@ pub fn InitializeIDTTables() {
 		for i in 0..IDT_MAXENTRYCOUNT {
 			(*pEntry.offset(i as isize)).set(
 				DummyHandler as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT
-			)
+			);
 		}
 	}
 }
 
-fn DummyHandler(){
+extern "x86-interrupt" fn DummyHandler(){
 	print_string( 0, 0, b"====================================================" );
     print_string( 0, 1, b"          Dummy Interrupt Handler Execute~!!!       " );
     print_string( 0, 2, b"           Interrupt or Exception Occur~!!!!        " );

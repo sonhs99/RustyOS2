@@ -19,6 +19,7 @@ pub fn entry() {
 	print_string(45, 13, b"Pass");
 
 	print_string(0, 14, b"IDT Initialize..............................[    ]");
+	descriptor::InitializeIDTTables();
 	assembly::LoadIDTR(descriptor::IDTR_STARTADDRESS);
 	print_string(45, 14, b"Pass");
 
