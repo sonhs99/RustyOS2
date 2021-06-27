@@ -26,3 +26,30 @@ pub fn OutPortByte(port: u16, data: u8) {
 		);
 	}
 }
+
+pub fn LoadGDTR(GDTRAddress: u64) {
+	unsafe {
+		asm!(
+			"lgdt [ {0} ]",
+			in(reg) GDTRAddress
+		);
+	}
+}
+
+pub fn LoadTR(TSSSegmentOffset: u16) {
+	unsafe {
+		asm!(
+			"ltr {0:x}",
+			in(reg) TSSSegmentOffset
+		)
+	}
+}
+
+pub fn LoadIDTR(IDTRAddress: u64) {
+	unsafe {
+		asm!(
+			"lidt [ {0} ]",
+			in(reg) IDTRAddress
+		);
+	}
+}

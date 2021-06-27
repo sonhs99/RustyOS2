@@ -9,6 +9,8 @@ use core::panic::PanicInfo;
 pub mod entry;
 pub mod assembly;
 pub mod keyboard;
+pub mod descriptor;
+pub mod utility;
 
 #[no_mangle] // don't mangle the name of this function
 pub unsafe extern "C" fn Main() -> ! {

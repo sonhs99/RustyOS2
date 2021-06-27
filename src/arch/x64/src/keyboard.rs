@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use crate::{assembly::{InPortByte, OutPortByte}, print_string};
+use crate::{assembly::{InPortByte, OutPortByte}};
 
 const KEY_SKIPCOUNTFORPAUSE: i32 = 2;
 const KEY_MAPPINGTABLEMAXCOUNT: usize = 89;
