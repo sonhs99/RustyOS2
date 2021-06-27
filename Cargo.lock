@@ -41,6 +41,7 @@ name = "temp_os"
 version = "0.1.0"
 dependencies = [
  "positioned-io",
+ "x64",
  "x86",
 ]
 
@@ -55,6 +56,10 @@ name = "winapi-build"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d315eee3b34aca4797b2da6b13ed88266e6d612562a0c46390af8299fc699bc"
+
+[[package]]
+name = "x64"
+version = "0.1.0"
 
 [[package]]
 name = "x86"

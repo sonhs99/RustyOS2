@@ -5,7 +5,8 @@ SECTION .text
 
 jmp 0x07C0:START
 
-TOTALSECTORCOUNT:	dw 0x2
+TOTALSECTORCOUNT:	dw 0x1313
+KERNEL32SECTORCOUNT: dw 0x2424
 
 START:
 	mov ax, 0x07C0
@@ -73,7 +74,7 @@ READDATA:
 	mov al, byte [ SECTORNUMBER ]
 	add al, 0x01
 	mov byte [ SECTORNUMBER ], al
-	cmp al, 19
+	cmp al, 37
 	jl READDATA
 
 	xor byte [ HEADNUMBER ], 0x01
@@ -154,9 +155,9 @@ PRINTMESSAGE:
 
 MESSAGE1: 				db 'Booting Start', 0
 
-DISKERRORMESSAGE:		db 'FAIL', 0
+DISKERRORMESSAGE:		db 'Fail', 0
 IMAGELOADINGMESSAGE:	db 'OS Image Loading............................[    ]', 0
-LOADINGCOMPLETEMESSAGE:	db 'PASS', 0
+LOADINGCOMPLETEMESSAGE:	db 'Pass', 0
 
 SECTORNUMBER:			db 0x02
 HEADNUMBER: 			db 0x00

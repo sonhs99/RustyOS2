@@ -22,8 +22,7 @@ fn main() {
 	build_kernel(&source_dir, &target_dir, "x86");
 
 	//3. AMD64(x86_64) kernel
-	// build_kernel(&source_dir, &target_dir, "x86_64");
-
+	build_kernel(&source_dir, &target_dir, "x64");
 }
 
 fn build_bootloader(
@@ -32,10 +31,10 @@ fn build_bootloader(
 ) {
 	println!("cargo:rerun-if-changed={}", &source.display());
 	let nasm = Command::new("nasm")
-								.arg("-o")
-								.arg(format!("{}/BootLoader.bin", &target.display()))
-								.arg(format!("{}/BootLoader.asm", &source.display()))
-								.status().unwrap();
+				.arg("-o")
+				.arg(format!("{}/BootLoader.bin", &target.display()))
+				.arg(format!("{}/BootLoader.asm", &source.display()))
+				.status().unwrap();
 	assert!(nasm.success());
 }
 
@@ -53,6 +52,18 @@ fn build_kernel(
 		Err(_) => {},
 	}
 
+	let ld_op = match arch {
+		"x86" => "-melf_i386",
+		"x64" => "-melf_x86_64",
+		_ => ""
+	};
+
+	let nasm_op = match arch {
+		"x86" => "elf32",
+		"x64" => "elf64",
+		_ => ""
+	};
+
 	let file_list = fs::read_dir(&src).expect("There are no 'arch/x86' directory")
 								.map(|entry| entry.unwrap().file_name());
 	let mut entry_file = Vec::<String>::new();
@@ -68,7 +79,11 @@ fn build_kernel(
 		}
 
 		match ext[1] {
-			"s" 	=> entry_file.push(format!("{}/{}", src.display(), file_name)),
+			"s" 	=> if arch == "x64" {
+						asm_file.push(format!("{}/{}", src.display(), file_name));
+					} else {
+						entry_file.push(format!("{}/{}", src.display(), file_name))
+					},
 			// "rs" 	=> rust_file.push(format!("{}/{}", src.display(), file_name)),
 			"asm"	=> asm_file.push(format!("{}/{}", src.display(), file_name)),
 			_ => {}
@@ -79,21 +94,24 @@ fn build_kernel(
 		panic!("EntryPoint cannot be two");
 	}
 
-	let nasm = Command::new("nasm")
+	if arch == "x86" {
+		let nasm = Command::new("nasm")
 				.arg("-o").arg(format!("{}/EntryPoint.bin", &target.display()))
 				.arg(&entry_file[0])
 				.status().unwrap();
-	assert!(nasm.success());
+		assert!(nasm.success());
+	}
 
 	for file in asm_file {
-		let ext: Vec<&str> = file.split(".").collect();
+		let names:Vec<&str> = file.split('/').collect();
+		let ext: Vec<&str> = names[names.len() - 1].split(".").collect();
 		let nasm = Command::new("nasm")
-				.arg("-f").arg("elf32")
+				.arg("-f").arg(nasm_op)
 				.arg("-o").arg(format!("{}/{}.o", &target.display(), &ext[0]))
 				.arg(&file)
 				.status().unwrap();
 		assert!(nasm.success());
-		obj_file.push(ext[0].to_string());
+		obj_file.push(format!("{}/{}.o", target.display(), ext[0]));
 	}
 
 	let cargo = Command::new("xargo").current_dir(&src)
@@ -106,14 +124,13 @@ fn build_kernel(
 
 	let lib_path = target.join("triple").join("debug");
 
-	// panic!(format!("{}/lib{}.a", lib_path.display(), arch));
-
 	let ld = Command::new("ld")
-			.args(["--gc-sections", "-melf_i386", "-nostdlib"])
+			.args(["--gc-sections", ld_op, "-nostdlib"])
 			.arg("-n")
 			.arg("-T").arg(format!("{}/linker.ld", source.display()))
 			.arg("-o").arg(format!("{}/Kernel{}.elf", target.display(), arch))
-			.arg(format!("{}/lib{}.a", lib_path.display(), arch))//.arg(obj_file.join(".o "))
+			.arg(format!("{}/lib{}.a", lib_path.display(), arch))
+			.args(obj_file)
 			.status().unwrap();
 	assert!(ld.success());
 
@@ -128,9 +145,13 @@ fn build_kernel(
 			.status().unwrap();
     assert!(objcopy.success());
 
-    merge_file(vec![&format!("{}/EntryPoint.bin", target.display()),
-            &format!("{}/Kernel{}.elf.bin", target.display(), arch)],
-            &format!("{}/Kernel{}.bin", root_target.display(), arch));
+	let mut merge_list: Vec<&str> = Vec::new();
+	let kernel_file = format!("{}/Kernel{}.elf.bin", target.display(), arch);
+	let entry_file = format!("{}/EntryPoint.bin", target.display());
+	if arch == "x86" { merge_list.push(&entry_file); }
+	merge_list.push(&kernel_file);
+	merge_file(merge_list,
+		&format!("{}/Kernel{}.bin", root_target.display(), arch));
 }
 
 fn merge_file(

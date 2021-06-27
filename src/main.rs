@@ -3,6 +3,7 @@ use positioned_io::WriteAt;
 
 static BOOTLOADER: &str = "BootLoader.bin";
 static KERNEL32: &str = "Kernelx86.bin";
+static KERNEL64: &str = "Kernelx64.bin";
 static DISK: &str = "Disk.img";
 
 #[inline]
@@ -25,17 +26,24 @@ fn main() {
     
     let sector_counts = merge_kernel(vec![
         &format!("{}/{}", target_dir.display(), BOOTLOADER),
-        &format!("{}/{}", target_dir.display(), KERNEL32)
+        &format!("{}/{}", target_dir.display(), KERNEL32),
+		&format!("{}/{}", target_dir.display(), KERNEL64),
     ], &mut output);
 
     let bootloader_sector = sector_counts[0];
     let kernel32_sector = sector_counts[1];
-    println!("BootLoader    : {} Sectors", bootloader_sector);
-    println!("32 Bit Kernel : {} Sectors", kernel32_sector);
-    println!("Total         : {} Sectors", bootloader_sector + &kernel32_sector);
+	let kernel64_sector = sector_counts[2];
+	println!("----------------FILE LIST------------------");
+    println!("BootLoader    : {:2} Sector(s), Offset [{:#04x}]", bootloader_sector, 0);
+    println!("32-bit Kernel : {:2} Sector(s), Offset [{:#04x}]", kernel32_sector, bootloader_sector);
+	println!("64-bit Kernel : {:2} Sector(s), Offset [{:#04x}]", kernel64_sector, bootloader_sector + kernel32_sector);
+	println!("----------------SUB TOTAL------------------");
+	println!("Total Kernel  : {:2} Sector(s)", kernel32_sector + kernel64_sector);
+	println!("------------------TOTAL--------------------");
+    println!("Total         : {:2} Sector(s)", bootloader_sector + kernel32_sector + kernel64_sector);
 
-    output.write_at(5, &u16_to_u8(kernel32_sector)).unwrap();
-
+    output.write_at(5, &u16_to_u8(kernel32_sector + kernel64_sector)).unwrap();
+	output.write_at(7, &u16_to_u8(kernel32_sector)).unwrap();
 }
 
 fn merge_kernel(
@@ -51,10 +59,11 @@ fn merge_kernel(
 
         loop {
             let nbyte = file.read(&mut buffer).unwrap();
+			if nbyte == 0 { break; }
             for i in nbyte..512 {
                 buffer[i] = 0;
             }
-            output.write(&buffer[..nbyte]).unwrap();
+            output.write(&buffer).unwrap();
             count += 1;
             if nbyte < buffer.len() { break; }
         }

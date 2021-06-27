@@ -1,4 +1,6 @@
 #![allow(non_snake_case)]
+#![allow(dead_code)]
+
 const PAGE_FLAGS_P      : u32 = 0x00000001;
 const PAGE_FLAGS_RW     : u32 = 0x00000002;
 const PAGE_FLAGS_US     : u32 = 0x00000004;
@@ -27,40 +29,40 @@ type PDENTRY = PageTableEntryStruct;
 type PTENTRY = PageTableEntryStruct;
 
 impl PageTableEntryStruct {
-    pub fn new(
+    pub fn set(
+		&mut self,
         UpperBaseAddress: u32,
         LowerBaseAddress: u32,
         LowerFlags: u32,
         UpperFlags: u32
-    ) -> Self {
-        PageTableEntryStruct{
-            AttributeAndLowerBaseAddress: LowerBaseAddress | LowerFlags,
-            UpperBaseAddressAndEXB: ( UpperBaseAddress & 0xFF ) | UpperFlags,
-        }
+    ) {
+		self.AttributeAndLowerBaseAddress = LowerBaseAddress | LowerFlags;
+        self.UpperBaseAddressAndEXB = ( UpperBaseAddress & 0xFF ) | UpperFlags;
     }
 }
 
-pub fn init() {
-    let PML4Entry = 0x100000 as *mut PML4ENTRY;
-    let PDPTEntry = 0x101000 as *mut PDPTENTRY;
-    let PDEntry = 0x102000 as *mut PDENTRY;
-    let mut MappingAddress: u32 = 0;
-
-    unsafe { *PML4Entry.offset(0) = PML4ENTRY::new(0x0, 0x10100, PAGE_FLAGS_DEFAULT, 0); }
+pub unsafe fn InitPageTable() {
+	let PML4Entry = 0x100000 as *mut PML4ENTRY;
+    (*PML4Entry.offset(0)).set(0x0, 0x101000, PAGE_FLAGS_DEFAULT, 0);
     for i in 1..PAGE_MAXENTRYCOUNT {
-        unsafe { *PML4Entry.offset((i * 8) as isize) = PML4ENTRY::new(0x0, 0x0, 0, 0); }
+        (*PML4Entry.offset(i as isize)).set(0x0, 0x0, 0, 0);
     }
 
+	let PDPTEntry = 0x101000 as *mut PDPTENTRY;
     for i in 0..64 {
-        unsafe { *PDPTEntry.offset((i * 8) as isize) = PDPTENTRY::new(0x0, 0x10200 + ( i * PAGE_TABLESIZE ), PAGE_FLAGS_DEFAULT, 0); }
+        (*PDPTEntry.offset(i as isize)).set(0x0, 0x102000 + ( i * PAGE_TABLESIZE ), PAGE_FLAGS_DEFAULT, 0);
     }
     for i in 64..PAGE_MAXENTRYCOUNT {
-        unsafe { *PDPTEntry.offset((i * 8) as isize) = PDPTENTRY::new(0x0, 0x0, 0, 0); }
+        (*PDPTEntry.offset(i as isize)).set(0x0, 0x0, 0, 0);
     }
 
-    for i in 0..(PAGE_MAXENTRYCOUNT * 64) {
-        unsafe { *PDEntry.offset((i * 8) as isize) = 
-            PDENTRY::new(0x10200 + (i * ( PAGE_DEFAULTSIZE >> 20 ) ) >> 12, MappingAddress, PAGE_FLAGS_DEFAULT | PAGE_FLAGS_PS, 0); }
+	let PDEntry = 0x102000 as *mut PDENTRY;
+    let mut MappingAddress: u32 = 0;
+	let size = PAGE_MAXENTRYCOUNT * 64;
+    for i in 0..size {
+        (*PDEntry.offset(i as isize))
+            	.set((i * ( PAGE_DEFAULTSIZE >> 20 ) ) >> 12, MappingAddress, PAGE_FLAGS_DEFAULT | PAGE_FLAGS_PS, 0);
         MappingAddress += PAGE_DEFAULTSIZE;
     }
+	
 }

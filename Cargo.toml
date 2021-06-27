@@ -9,6 +9,7 @@ build = "build.rs"
 [dependencies]
 positioned-io = "0.2"
 x86 = { path = "./src/arch/x86" }
+x64 = { path = "./src/arch/x64" }
 
 [profile.dev]
 panic = "abort"
