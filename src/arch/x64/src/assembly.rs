@@ -55,7 +55,25 @@ pub fn LoadIDTR(IDTRAddress: u64) {
 }
 
 pub fn Int3() {
-	unsafe {
-		asm!("Int 3");
+	unsafe { asm!("Int 3"); }
+}
+
+pub fn EnableInterrupt() {
+	unsafe { asm!("sti"); }
+}
+
+pub fn DisableInterrupt() {
+	unsafe { asm!("cli"); }
+}
+
+pub fn ReadRFLAGS() -> u64 {
+	let mut flag: u64;
+	unsafe { 
+		asm!(
+			"pushfq
+			 pop {0}",
+			 out(reg) flag
+		); 
 	}
+	flag
 }

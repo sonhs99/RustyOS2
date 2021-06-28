@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 
 use core::mem::size_of;
-use crate::{utility::memset, print_string};
+use crate::{exception, interrupt, print_string, utility::memset};
 
 const GDT_TYPE_CODE			:u8 = 0x0A;
 const GDT_TYPE_DATA			:u8 = 0x02;
@@ -216,24 +216,8 @@ pub fn InitializeIDTTables() {
 
 		for i in 0..IDT_MAXENTRYCOUNT {
 			(*pEntry.offset(i as isize)).set(
-				CommonExceptionHandler as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT
+				exception!(0), 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT
 			);
 		}
 	}
-}
-
-extern "x86-interrupt" fn CommonExceptionHandler(){
-	print_string( 0, 0, b"====================================================" );
-    print_string( 0, 1, b"          Dummy Interrupt Handler Execute~!!!       " );
-    print_string( 0, 2, b"           Interrupt or Exception Occur~!!!!        " );
-    print_string( 0, 3, b"====================================================" );
-	loop{}
-}
-
-extern "x86-interrupt" fn CommonInterruptHandler(vector: u32){
-	print_string( 0, 0, b"====================================================" );
-    print_string( 0, 1, b"          Dummy Interrupt Handler Execute~!!!       " );
-    print_string( 0, 2, b"           Interrupt or Exception Occur~!!!!        " );
-    print_string( 0, 3, b"====================================================" );
-	// loop{}
 }
