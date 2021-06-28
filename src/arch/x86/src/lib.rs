@@ -88,8 +88,8 @@ fn init_kernel64_area() -> bool {
 	let size: u32 = 0x600000 - (base_address as u32); 
 	for i in 0..(size/4) {
 		unsafe {
-			*base_address.offset(i as isize) = 0xFEEBFEEB;
-			if *base_address.offset(i as isize) != 0xFEEBFEEB {
+			*base_address.offset(i as isize) = 0x00;
+			if *base_address.offset(i as isize) != 0x00 {
 				return false;
 			}
 		}

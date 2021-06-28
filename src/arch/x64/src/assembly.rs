@@ -53,3 +53,9 @@ pub fn LoadIDTR(IDTRAddress: u64) {
 		);
 	}
 }
+
+pub fn Int3() {
+	unsafe {
+		asm!("Int 3");
+	}
+}

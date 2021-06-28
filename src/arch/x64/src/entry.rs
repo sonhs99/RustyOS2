@@ -38,7 +38,7 @@ pub fn entry() {
 				if (flags & keyboard::KeyStatement::KeyFlagsDown as u8) != 0 {
 					print_string(i, 16, &[vcTemp]);
 
-					if vcTemp == '0' as u8 { 1 / 0; }
+					if vcTemp == '0' as u8 { assembly::Int3(); }
 
 					i += 1;
 				}

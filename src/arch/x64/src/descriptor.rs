@@ -35,7 +35,7 @@ pub const GDTR_STARTADDRESS	:u64 = 0x142000;
 const GDT_MAXENTRY8COUNT:u32 = 3;
 const GDT_MAXENTRY16COUNT:u32 = 1;
 
-const GDT_TABLESIZE		:u32 = (size_of::<GDT8ENTRY>() as u32) * GDT_MAXENTRY8COUNT +
+const GDT_TABLESIZE		:u32 =  (size_of::<GDT8ENTRY>() as u32) * GDT_MAXENTRY8COUNT +
 								(size_of::<GDT16ENTRY>() as u32) * GDT_MAXENTRY16COUNT;
 const TSS_SEGMENTSIZE	:u32 = size_of::<TSSSEGMENT>() as u32;
 
@@ -129,7 +129,7 @@ impl GDTEntry8Struct {
 		Type: u8
 	) {
 		self.LowerLimit = Limit as u16 & 0xFFFF;
-		self.LowerBaseAddress = BaseAddress as u16 & 0xFFFF;
+		self.LowerBaseAddress = (BaseAddress & 0xFFFF) as u16;
 		self.UpperBaseAddress1 = ((BaseAddress >> 16) & 0xFF) as u8;
 		self.TypeAndLowerFlag = LowerFlags | Type;
 		self.UpperLimitAndUpperFlag = ((Limit >> 16) & 0xFF ) as u8 | UpperFlags;
@@ -146,13 +146,13 @@ impl GDTEntry16Struct {
 		LowerFlags: u8,
 		Type: u8
 	) {
-		self.LowerLimit = Limit as u16 & 0xFFFF;
-		self.LowerBaseAddress = BaseAddress as u16 & 0xFFFF;
+		self.LowerLimit = (Limit & 0xFFFF) as u16;
+		self.LowerBaseAddress = (BaseAddress & 0xFFFF) as u16;
 		self.MiddleBaseAddress1 = ((BaseAddress >> 16) & 0xFF) as u8;
 		self.TypeAndLowerFlag = LowerFlags | Type;
 		self.UpperLimitAndUpperFlag = ((Limit >> 16) & 0xFF) as u8 | UpperFlags;
 		self.MiddleBaseAddress2 = ((BaseAddress >> 24) & 0xFF) as u8;
-		self.UpperLimitAndUpperFlag = (BaseAddress >> 32) as u8;
+		self.UpperBaseAddress = (BaseAddress >> 32) as u32;
 		self.Reserved = 0;
 	}
 }
@@ -188,7 +188,7 @@ pub fn InitializeGDTTableAndTTS() {
 		(*pEntry.offset(2)).set(0, 0xFFFFF, GDT_FLAGS_UPPER_DATA, GDT_FLAG_LOWER_KERNELDATA, GDT_TYPE_DATA);
 		(*((pEntry.offset(3) as u64) as *mut GDT16ENTRY)).set( 
 			pTSS as u64, 
-			size_of::<TSSSEGMENT>() as u32 - 1, 
+			(size_of::<TSSSEGMENT>() - 1) as u32, 
 			GDT_FLAGS_UPPER_TSS,
 			GDT_FLAG_LOWER_TSS, 
 			GDT_TYPE_TSS
@@ -216,16 +216,24 @@ pub fn InitializeIDTTables() {
 
 		for i in 0..IDT_MAXENTRYCOUNT {
 			(*pEntry.offset(i as isize)).set(
-				DummyHandler as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT
+				CommonExceptionHandler as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT
 			);
 		}
 	}
 }
 
-extern "x86-interrupt" fn DummyHandler(){
+extern "x86-interrupt" fn CommonExceptionHandler(){
 	print_string( 0, 0, b"====================================================" );
     print_string( 0, 1, b"          Dummy Interrupt Handler Execute~!!!       " );
     print_string( 0, 2, b"           Interrupt or Exception Occur~!!!!        " );
     print_string( 0, 3, b"====================================================" );
 	loop{}
+}
+
+extern "x86-interrupt" fn CommonInterruptHandler(vector: u32){
+	print_string( 0, 0, b"====================================================" );
+    print_string( 0, 1, b"          Dummy Interrupt Handler Execute~!!!       " );
+    print_string( 0, 2, b"           Interrupt or Exception Occur~!!!!        " );
+    print_string( 0, 3, b"====================================================" );
+	// loop{}
 }
