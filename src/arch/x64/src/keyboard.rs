@@ -1,10 +1,13 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use crate::{assembly::{InPortByte, OutPortByte}};
+use lazy_static::lazy_static;
+
+use crate::{assembly::{InPortByte, OutPortByte}, types::Queue, utility::set_interrupt_flag};
 
 const KEY_SKIPCOUNTFORPAUSE: i32 = 2;
 const KEY_MAPPINGTABLEMAXCOUNT: usize = 89;
+const KEY_MAXQUEUECOUNT: usize = 100;
 pub enum KeyStatement {
 	KeyFlagsUp 			= 0x00,
 	KeyFlagsDown 		= 0x01,
@@ -52,6 +55,13 @@ pub enum KeySpecial {
 }
 
 #[repr(packed(1))]
+#[derive(Clone, Copy)]
+struct KeyData {
+	ScanCode: u8,
+	ASCIICode: u8
+}
+
+#[repr(packed(1))]
 struct KeyMappingEntry(u8, u8);
 
 impl KeyMappingEntry {
@@ -83,7 +93,21 @@ pub fn IsInputBufferFull() -> bool {
 	return false;
 }
 
+pub fn WaitForACKAndPutOtherScanCode() -> bool {
+	let mut result = false;
+	for _ in 0..100 {
+		for _ in 0..0xFFFF {
+			if IsOutputBufferFull() { break; }
+		}
+		let data = InPortByte(0x60);
+		if data == 0xFA { result = true; break; }
+		else { ConvertScanCodeAndPutQueue(data); }
+	}
+	result
+}
+
 pub fn ActiveKeyboard() -> bool {
+	let previous_interrupt = set_interrupt_flag(false);
 	OutPortByte(0x64, 0xAE);
 	for _ in 0..0xFFFF {
 		if !IsInputBufferFull() { break; }
@@ -96,7 +120,9 @@ pub fn ActiveKeyboard() -> bool {
 		}
 		if InPortByte(0x60) == 0xFA { return true; }
 	}
-	return false;
+	let result = WaitForACKAndPutOtherScanCode();
+	set_interrupt_flag(previous_interrupt);
+	return result;
 }
 
 pub fn GetKeyboardScanCode() -> u8 {
@@ -106,7 +132,7 @@ pub fn GetKeyboardScanCode() -> u8 {
 
 pub fn ChangeKeyboardLED( CapsLockOn: bool, NumLockOn: bool, ScrollLockOn: bool) -> bool {
 	let mut i = 0;
-
+	let previous_interrupt = set_interrupt_flag(false);
 	for _ in 0..0xFFFF {
 		if !IsInputBufferFull() { break; }
 	}
@@ -115,15 +141,12 @@ pub fn ChangeKeyboardLED( CapsLockOn: bool, NumLockOn: bool, ScrollLockOn: bool)
 		if !IsInputBufferFull() { break; }
 	}
 
-	i = 0;
-	for _ in 0..100 {
-		for _ in 0..0xFFFF {
-			if !IsOutputBufferFull() { break; }
-		}
-		if InPortByte(0x60) == 0xFA { break; }
-		i += 1;
+	let result = WaitForACKAndPutOtherScanCode();
+
+	if result {
+		set_interrupt_flag(previous_interrupt);
+		return false;
 	}
-	if i >= 100 { return false; }
 
 	OutPortByte(0x60, ((CapsLockOn as u8) << 2) | ((NumLockOn as u8) << 1) | (ScrollLockOn as u8));
 	
@@ -131,16 +154,9 @@ pub fn ChangeKeyboardLED( CapsLockOn: bool, NumLockOn: bool, ScrollLockOn: bool)
 		if !IsInputBufferFull() { break; }
 	}
 
-	i = 0;
-	for _ in 0..100 {
-		for _ in 0..0xFFFF {
-			if !IsOutputBufferFull() { break; }
-		}
-		if InPortByte(0x60) == 0xFA { break; }
-		i += 1;
-	}
-	if i >= 100 { return false; }
-	return true;
+	let result = WaitForACKAndPutOtherScanCode();
+	set_interrupt_flag(previous_interrupt);
+	return result;
 }
 
 pub fn EnableA20Gate() {
@@ -178,6 +194,17 @@ static mut gs_stKeyboardManager: KeyboardManager = KeyboardManager{
 	ExtendedCodeIn:	false,
 	SkipCountForPause: 0
 };
+
+static mut KeyBuffer: [KeyData; KEY_MAXQUEUECOUNT] = [KeyData{ScanCode: 0, ASCIICode: 0}; 100];
+lazy_static! {
+	static ref KeyQueue: Queue<KeyData> = Queue {
+		max_count: KEY_MAXQUEUECOUNT,
+        buffer: &KeyBuffer,
+        put_index: 0,
+        get_index: 0,
+        last_operation_put: false
+	};
+}
 
 static KeyMappingTable: [KeyMappingEntry; KEY_MAPPINGTABLEMAXCOUNT] =
 [
@@ -369,4 +396,9 @@ pub fn ConvertScanCodeToASCIICode(
 
 	UpdateCombinationKeyStatusAndLED(ScanCode);
 	return true;
+}
+
+fn ConvertScanCodeAndPutQueue(ScanCode: u8) {
+	let previous_interrupt = set_interrupt_flag(false);
+
 }

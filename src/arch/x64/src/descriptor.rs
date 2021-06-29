@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 
 use core::mem::size_of;
-use crate::{exception, interrupt, print_string, utility::memset};
+use crate::{interrupt, utility::memset};
 
 const GDT_TYPE_CODE			:u8 = 0x0A;
 const GDT_TYPE_DATA			:u8 = 0x02;
@@ -214,10 +214,49 @@ pub fn InitializeIDTTables() {
 		(*pIDTR).BaseAddress = pEntry as u64;
 		(*pIDTR).Limit = IDT_TABLESIZE - 1;
 
-		for i in 0..IDT_MAXENTRYCOUNT {
-			(*pEntry.offset(i as isize)).set(
-				exception!(0), 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT
-			);
+		(*pEntry.offset( 0)).set(interrupt::divided_by_zero as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 1)).set(interrupt::debug as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 2)).set(interrupt::NMI as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 3)).set(interrupt::break_point as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 4)).set(interrupt::overflow as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 5)).set(interrupt::bound_range_exceeded as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 6)).set(interrupt::invalid_opcode as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 7)).set(interrupt::device_not_avalidable as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 8)).set(interrupt::double_fault as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset( 9)).set(interrupt::coprocessor_segment_overrun as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(10)).set(interrupt::invalid_tss as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(11)).set(interrupt::segment_not_present as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(12)).set(interrupt::stack_segment_fault as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(13)).set(interrupt::general_protecton as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(14)).set(interrupt::page_fault as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(15)).set(interrupt::ISR15 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(16)).set(interrupt::FPU_error as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(17)).set(interrupt::alignment_check as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(18)).set(interrupt::machine_check as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(19)).set(interrupt::SMID_error as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		for i in 20..32 {
+			(*pEntry.offset(i)).set(interrupt::common_exception as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		}
+
+		(*pEntry.offset(32)).set(interrupt::timer as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(33)).set(interrupt::keyboard as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(34)).set(interrupt::slave_PIC as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(35)).set(interrupt::serial_2 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(36)).set(interrupt::serial_1 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(37)).set(interrupt::parallel_2 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(38)).set(interrupt::floppy as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(39)).set(interrupt::parallel_1 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(40)).set(interrupt::rtc as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(41)).set(interrupt::ISR41 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(42)).set(interrupt::not_use_0 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(43)).set(interrupt::not_use_1 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(44)).set(interrupt::mouse as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(45)).set(interrupt::coprocessor as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(46)).set(interrupt::hdd1 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		(*pEntry.offset(47)).set(interrupt::hdd2 as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
+		
+		for i in 48..IDT_MAXENTRYCOUNT {
+			(*pEntry.offset(i as isize)).set(interrupt::common_interrupt as u64, 0x08, IDT_FLAGS_IST1, IDT_FLAGS_KERNEL, IDT_TYPE_INTERRUPT);
 		}
 	}
 }

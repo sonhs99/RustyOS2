@@ -1,4 +1,4 @@
-use crate::{assembly, descriptor, keyboard, print_string};
+use crate::{assembly::{self, EnableInterrupt}, descriptor, keyboard, pic::{InitializePIC, MaskedPICInterrupt}, print_string};
 
 #[allow(unconditional_panic)]
 pub fn entry() {
@@ -31,15 +31,20 @@ pub fn entry() {
 		print_string(45, 15, b"Fail");
 		loop {}
 	}
+
+	print_string(0, 16, b"PIC Controller And Interrupt Initialize.....[    ]");
+	InitializePIC();
+	MaskedPICInterrupt(0);
+	EnableInterrupt();
+	print_string(45, 16, b"Pass");
+
 	loop {
 		if keyboard::IsOutputBufferFull() {
 			let temp = keyboard::GetKeyboardScanCode();
 			if keyboard::ConvertScanCodeToASCIICode(temp, &mut vcTemp,&mut flags) {
 				if (flags & keyboard::KeyStatement::KeyFlagsDown as u8) != 0 {
-					print_string(i, 16, &[vcTemp]);
-
-					if vcTemp == '0' as u8 { assembly::Int3(); }
-
+					print_string(i, 17, &[vcTemp]);
+					if vcTemp == '0' as u8 { vcTemp /= 0; }
 					i += 1;
 				}
 			}

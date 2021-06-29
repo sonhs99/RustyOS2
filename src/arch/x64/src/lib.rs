@@ -12,6 +12,8 @@ pub mod keyboard;
 pub mod descriptor;
 pub mod utility;
 pub mod interrupt;
+pub mod pic;
+pub mod types;
 
 #[no_mangle] // don't mangle the name of this function
 pub unsafe extern "C" fn Main() -> ! {

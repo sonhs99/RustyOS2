@@ -1,4 +1,5 @@
-use crate::print_string;
+#![feature(const_raw_ptr_to_usize_cast)]
+use crate::{pic::{self, SendEOI}, print_string};
 
 pub extern "x86-interrupt" fn divided_by_zero() 			{ CommonExceptionHandler( 0); }
 pub extern "x86-interrupt" fn debug()						{ CommonExceptionHandler( 1); }
@@ -45,14 +46,14 @@ fn CommonExceptionHandler(vector: u8){
 		vector / 10 + '0' as u8, vector % 10 + '0' as u8
 	];
 	print_string( 0, 0, b"====================================================" );
-   	print_string( 0, 1, b"               Exception Occur");
-   	print_string( 0, 2, b"                  Vector :");
+   	print_string( 0, 1, b"               Exception Occur                      ");
+   	print_string( 0, 2, b"                  Vector :                          ");
 	print_string( 27,2, &buffer);
    	print_string( 0, 3, b"====================================================" );
 }
 
 fn CommonInterruptHandler(vector: u8){
-	let buffer:[u8; 10] = *b"[INT:  , ]";
+	let mut buffer  = b"[INT:  , ]".clone();
 	static mut common_count: u8 = 0;
 	buffer[5] = vector / 10 + '0' as u8;
 	buffer[6] = vector % 10 + '0' as u8;
@@ -61,11 +62,11 @@ fn CommonInterruptHandler(vector: u8){
 		common_count = (common_count + 1) % 10;
 	}
 	print_string(70, 0, &buffer);
-	//EOI
+	SendEOI((vector - pic::PIC_IRQSTARTVECTOR) as u16 );
 }
 
 fn KeyboardHandler(vector: u8){
-	let buffer:[u8; 10] = *b"[INT:  , ]";
+	let mut buffer = b"[INT:  , ]".clone();
 	static mut keyboard_count: u8 = 0;
 	buffer[5] = vector / 10 + '0' as u8;
 	buffer[6] = vector % 10 + '0' as u8;
@@ -74,5 +75,5 @@ fn KeyboardHandler(vector: u8){
 		keyboard_count = (keyboard_count + 1) % 10;
 	}
 	print_string(0, 0, &buffer);
-	//EOI
+	SendEOI((vector - pic::PIC_IRQSTARTVECTOR) as u16 );
 }
