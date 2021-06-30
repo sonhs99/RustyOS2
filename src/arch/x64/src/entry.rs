@@ -1,4 +1,4 @@
-use crate::{assembly::{self, EnableInterrupt}, descriptor, interrupt::keyboard, keyboard, pic::{InitializePIC, MaskedPICInterrupt}, print_string};
+use crate::{assembly::{self, EnableInterrupt}, descriptor, interrupt::keyboard, keyboard, pic::{InitializePIC, MaskedPICInterrupt}, print_string, println};
 
 #[allow(unconditional_panic)]
 pub fn entry() {
@@ -35,6 +35,8 @@ pub fn entry() {
 	MaskedPICInterrupt(0);
 	EnableInterrupt();
 	print_string(45, 16, b"Pass");
+
+	println!("hello, world!");
 
 	loop {
 		let mut key_data: keyboard::KeyData = keyboard::KeyData::new();
