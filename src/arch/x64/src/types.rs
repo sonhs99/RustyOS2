@@ -1,16 +1,16 @@
 #[repr(C, packed(1))]
-pub struct Queue<T> {
-    max_count: isize,
+pub struct Queue<T: Copy + 'static> {
+    max_count: usize,
 
-    buffer: *mut T,
-    put_index: isize,
-    get_index: isize,
+    buffer: &'static mut [T],
+    put_index: usize,
+    get_index: usize,
 
     last_operation_put: bool
 }
 
-impl<T: Copy> Queue<T> {
-    pub fn new(size: isize, buffer: &mut [T]) -> Self {
+impl<T: Copy + 'static> Queue<T> {
+    pub fn new(size: usize, buffer: &'static mut [T]) -> Self {
         Self{
             max_count: size,
             buffer: buffer,
@@ -28,17 +28,19 @@ impl<T: Copy> Queue<T> {
         (self.get_index == self.put_index) && !self.last_operation_put
     }
 
-    pub fn enqueue(&mut self, data: &T) -> Result<(), ()> {
-        if self.is_full() { return Err(()); }
-        unsafe { self.buffer[self.put_index] = *data; }
+    pub fn enqueue(&mut self, data: &T) -> bool {
+        if self.is_full() { return false; }
+        self.buffer[self.put_index] = *data;
         self.put_index = (self.put_index + 1) % self.max_count;
-        Ok(()) 
+        true
     }
 
     pub fn dequeue(&mut self) -> Result<T, ()> {
         if self.is_empty() { return Err(()); }
-        let data = unsafe {self.buffer[self.get_index]};
+        let data = self.buffer[self.get_index];
         self.get_index = (self.get_index + 1) % self.max_count;
         Ok(data) 
     }
 }
+
+unsafe impl<T: Copy + 'static> Sync for Queue<T>{}

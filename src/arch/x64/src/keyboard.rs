@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 use lazy_static::lazy_static;
+use spin::Mutex;
 
 use crate::{assembly::{InPortByte, OutPortByte}, types::Queue, utility::set_interrupt_flag};
 
@@ -56,9 +57,20 @@ pub enum KeySpecial {
 
 #[repr(packed(1))]
 #[derive(Clone, Copy)]
-struct KeyData {
-	ScanCode: u8,
-	ASCIICode: u8
+pub struct KeyData {
+	pub ScanCode: u8,
+	pub ASCIICode: u8, 
+	pub Flags: u8
+}
+
+impl KeyData {
+	pub fn new() -> Self {
+		Self{
+			ScanCode: 0,
+			ASCIICode: 0, 
+			Flags: 0
+		}
+	}
 }
 
 #[repr(packed(1))]
@@ -72,7 +84,6 @@ impl KeyMappingEntry {
 		self.1
 	}
 }
-
 struct KeyboardManager {
 	ShiftDown: 		bool,
 	CapsLockOn: 	bool,
@@ -131,7 +142,6 @@ pub fn GetKeyboardScanCode() -> u8 {
 }
 
 pub fn ChangeKeyboardLED( CapsLockOn: bool, NumLockOn: bool, ScrollLockOn: bool) -> bool {
-	let mut i = 0;
 	let previous_interrupt = set_interrupt_flag(false);
 	for _ in 0..0xFFFF {
 		if !IsInputBufferFull() { break; }
@@ -195,15 +205,9 @@ static mut gs_stKeyboardManager: KeyboardManager = KeyboardManager{
 	SkipCountForPause: 0
 };
 
-static mut KeyBuffer: [KeyData; KEY_MAXQUEUECOUNT] = [KeyData{ScanCode: 0, ASCIICode: 0}; 100];
+static mut KeyBuffer: [KeyData; KEY_MAXQUEUECOUNT] = [KeyData{ScanCode: 0, ASCIICode: 0, Flags: 0}; 100];
 lazy_static! {
-	static ref KeyQueue: Queue<KeyData> = Queue {
-		max_count: KEY_MAXQUEUECOUNT,
-        buffer: &KeyBuffer,
-        put_index: 0,
-        get_index: 0,
-        last_operation_put: false
-	};
+	static ref KeyQueue: Mutex<Queue<KeyData>> = Mutex::new(Queue::new(KEY_MAXQUEUECOUNT, unsafe { &mut KeyBuffer }));
 }
 
 static KeyMappingTable: [KeyMappingEntry; KEY_MAPPINGTABLEMAXCOUNT] =
@@ -347,8 +351,8 @@ pub fn UpdateCombinationKeyStatusAndLED(ScanCode: u8) {
 	
 	unsafe {
 		if (DownScanCode == 42) || (DownScanCode == 54) { gs_stKeyboardManager.ShiftDown = Down; }
-		else if (DownScanCode == 58) && Down { gs_stKeyboardManager.CapsLockOn ^= 	true; LEDStatusChange = true; }
-		else if (DownScanCode == 69) && Down { gs_stKeyboardManager.NumLockOn ^= 	true; LEDStatusChange = true; }
+		else if (DownScanCode == 58) && Down { gs_stKeyboardManager.CapsLockOn	 ^= true; LEDStatusChange = true; }
+		else if (DownScanCode == 69) && Down { gs_stKeyboardManager.NumLockOn	 ^= true; LEDStatusChange = true; }
 		else if (DownScanCode == 70) && Down { gs_stKeyboardManager.ScrollLockOn ^= true; LEDStatusChange = true; }
 
 		if LEDStatusChange {
@@ -398,7 +402,34 @@ pub fn ConvertScanCodeToASCIICode(
 	return true;
 }
 
-fn ConvertScanCodeAndPutQueue(ScanCode: u8) {
-	let previous_interrupt = set_interrupt_flag(false);
+pub fn InitializeKeyboard() -> bool {
+	ActiveKeyboard()
+}
 
+pub fn ConvertScanCodeAndPutQueue(ScanCode: u8) -> bool {
+	let mut key_data: KeyData = KeyData {
+		ScanCode: ScanCode,
+		ASCIICode: 0,
+		Flags: 0
+	};
+	let mut result = false;
+	
+	if ConvertScanCodeToASCIICode(ScanCode, &mut key_data.ASCIICode, &mut key_data.Flags){
+		let previous_interrupt = set_interrupt_flag(false);
+		unsafe {KeyQueue.force_unlock();}
+		result = KeyQueue.lock().enqueue(&mut key_data);
+		set_interrupt_flag(previous_interrupt);
+	}
+	result
+}
+
+pub fn GetKeyFromKeyQueue(data: &mut KeyData) -> bool {
+	if KeyQueue.lock().is_empty() { return true; }
+	let previous_interrupt = set_interrupt_flag(false);
+	let result = KeyQueue.lock().dequeue();
+	set_interrupt_flag(previous_interrupt);
+	match result{
+		Ok(res) => {*data = res; return true;}
+		Err(()) => {return false;}
+	}
 }

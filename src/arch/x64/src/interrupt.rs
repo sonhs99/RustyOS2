@@ -1,5 +1,5 @@
 #![feature(const_raw_ptr_to_usize_cast)]
-use crate::{pic::{self, SendEOI}, print_string};
+use crate::{keyboard::{ConvertScanCodeAndPutQueue, GetKeyboardScanCode, IsOutputBufferFull}, pic::{self, SendEOI}, print_string};
 
 pub extern "x86-interrupt" fn divided_by_zero() 			{ CommonExceptionHandler( 0); }
 pub extern "x86-interrupt" fn debug()						{ CommonExceptionHandler( 1); }
@@ -75,5 +75,11 @@ fn KeyboardHandler(vector: u8){
 		keyboard_count = (keyboard_count + 1) % 10;
 	}
 	print_string(0, 0, &buffer);
+	
+	if IsOutputBufferFull() {
+		let temp = GetKeyboardScanCode();
+		ConvertScanCodeAndPutQueue(temp);
+	}
+	
 	SendEOI((vector - pic::PIC_IRQSTARTVECTOR) as u16 );
 }

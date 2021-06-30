@@ -1,9 +1,7 @@
-use crate::{assembly::{self, EnableInterrupt}, descriptor, keyboard, pic::{InitializePIC, MaskedPICInterrupt}, print_string};
+use crate::{assembly::{self, EnableInterrupt}, descriptor, interrupt::keyboard, keyboard, pic::{InitializePIC, MaskedPICInterrupt}, print_string};
 
 #[allow(unconditional_panic)]
 pub fn entry() {
-	let mut vcTemp = 0;
-	let mut flags = 0;
 	let mut i = 0;
 
 	print_string(0, 10, b"Swtich to IA-32e Mode.......................[Pass]");
@@ -23,8 +21,8 @@ pub fn entry() {
 	assembly::LoadIDTR(descriptor::IDTR_STARTADDRESS);
 	print_string(45, 14, b"Pass");
 
-	print_string(0, 15, b"Keyboard Activate...........................[    ]");
-	if keyboard::ActiveKeyboard() {
+	print_string(0, 15, b"Keyboard Activate And Queue Initialize......[    ]");
+	if keyboard::InitializeKeyboard() {
 		print_string(45, 15, b"Pass");
 		keyboard::ChangeKeyboardLED(false, false, false);
 	} else {
@@ -39,14 +37,11 @@ pub fn entry() {
 	print_string(45, 16, b"Pass");
 
 	loop {
-		if keyboard::IsOutputBufferFull() {
-			let temp = keyboard::GetKeyboardScanCode();
-			if keyboard::ConvertScanCodeToASCIICode(temp, &mut vcTemp,&mut flags) {
-				if (flags & keyboard::KeyStatement::KeyFlagsDown as u8) != 0 {
-					print_string(i, 17, &[vcTemp]);
-					if vcTemp == '0' as u8 { vcTemp /= 0; }
-					i += 1;
-				}
+		let mut key_data: keyboard::KeyData = keyboard::KeyData::new();
+		if keyboard::GetKeyFromKeyQueue(&mut key_data) {
+			if (key_data.Flags & keyboard::KeyStatement::KeyFlagsDown as u8) != 0 {
+				print_string(i, 17, &[key_data.ASCIICode]);
+				i += 1;
 			}
 		}
 	}
