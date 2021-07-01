@@ -4,7 +4,7 @@
 use lazy_static::lazy_static;
 use spin::Mutex;
 
-use crate::{assembly::{InPortByte, OutPortByte}, types::Queue, utility::set_interrupt_flag};
+use crate::{assembly::{InPortByte, OutPortByte}, types::StaticQueue, utility::set_interrupt_flag};
 
 const KEY_SKIPCOUNTFORPAUSE: i32 = 2;
 const KEY_MAPPINGTABLEMAXCOUNT: usize = 89;
@@ -207,7 +207,7 @@ static mut gs_stKeyboardManager: KeyboardManager = KeyboardManager{
 
 static mut KeyBuffer: [KeyData; KEY_MAXQUEUECOUNT] = [KeyData{ScanCode: 0, ASCIICode: 0, Flags: 0}; 100];
 lazy_static! {
-	static ref KeyQueue: Mutex<Queue<KeyData>> = Mutex::new(Queue::new(KEY_MAXQUEUECOUNT, unsafe { &mut KeyBuffer }));
+	static ref KeyQueue: Mutex<StaticQueue<KeyData>> = Mutex::new(StaticQueue::new(KEY_MAXQUEUECOUNT, unsafe { &mut KeyBuffer }));
 }
 
 static KeyMappingTable: [KeyMappingEntry; KEY_MAPPINGTABLEMAXCOUNT] =

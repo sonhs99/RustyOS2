@@ -2,6 +2,13 @@ use core::fmt;
 use lazy_static::lazy_static;
 use spin::Mutex;
 
+use crate::{assembly::OutPortByte, keyboard, print_string};
+
+const VGA_PORT_INDEX:       u16 = 0x3D4;
+const VGA_PORT_DATA:        u16 = 0x3D5;
+const VGA_INDEX_UPPERCURSER: u8 = 0x0E;
+const VGA_INDEX_LOWERCURSER: u8 = 0x0F;
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -60,7 +67,7 @@ impl Writer{
         match byte {
             b'\n' => self.new_line(),
             byte => {
-                if self.column_position >= BUFFER_WIDTH * BUFFER_HEIGHT {
+                if self.column_position >= (BUFFER_WIDTH * BUFFER_HEIGHT) {
                     self.new_line();
                 }
                 self.buffer.chars[self.column_position] = ScreenChar {
@@ -79,10 +86,12 @@ impl Writer{
                 _ => self.write_byte(0xfe)
             }
         }
+        self.set_curser(self.column_position % BUFFER_WIDTH, self.column_position / BUFFER_WIDTH);
     }
 
     fn new_line(&mut self) {
-		if self.column_position <= BUFFER_WIDTH * BUFFER_HEIGHT {
+        // print_string(0, 24, b"a");
+		if self.column_position <= BUFFER_WIDTH * (BUFFER_HEIGHT - 1) - 1 {
             self.column_position += BUFFER_WIDTH - (self.column_position % BUFFER_WIDTH);
 			return;
         }
@@ -94,7 +103,7 @@ impl Writer{
             }
         }
         self.clear_row(BUFFER_HEIGHT - 1);
-        self.column_position = 0;
+        self.column_position = (BUFFER_HEIGHT - 1) * BUFFER_WIDTH;
     }
 
     fn clear_row(&mut self, row: usize){
@@ -114,8 +123,23 @@ impl Writer{
 				color_code: self.color_code
 			}
 		}
-		self.column_position = 0;
+		self.set_curser(0, 0);
 	}
+
+    pub fn set_curser(&mut self, x: usize, y: usize) {
+        let linear = y * BUFFER_WIDTH + x;
+        OutPortByte(VGA_PORT_INDEX, VGA_INDEX_UPPERCURSER);
+        OutPortByte(VGA_PORT_DATA, (linear >> 8) as u8);
+
+        OutPortByte(VGA_PORT_INDEX, VGA_INDEX_LOWERCURSER);
+        OutPortByte(VGA_PORT_DATA, (linear & 0xFF) as u8);
+
+        self.column_position = linear;
+    }
+
+    pub fn get_curser(&self) -> (usize, usize) {
+        (self.column_position % BUFFER_WIDTH, self.column_position / BUFFER_WIDTH)
+    }
 }
 
 impl fmt::Write for Writer {
@@ -148,4 +172,31 @@ macro_rules! println {
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     WRITER.lock().write_fmt(args).unwrap();
+}
+
+#[doc(hidden)]
+pub fn clear_screen() {
+    WRITER.lock().clear_screen();
+}
+
+pub fn getch() -> u8 {
+    let mut key_data: keyboard::KeyData = keyboard::KeyData::new();
+    loop {
+        while !keyboard::GetKeyFromKeyQueue(&mut key_data) {};
+        if (key_data.Flags & keyboard::KeyStatement::KeyFlagsDown as u8) != 0 {
+            return key_data.ASCIICode;
+        }
+    }
+}
+
+pub fn set_curser(x: usize, y: usize) {
+    WRITER.lock().set_curser(x, y);
+}
+
+pub fn get_curser() -> (usize, usize) {
+    WRITER.lock().get_curser()
+}
+
+pub fn init_console(x:usize, y: usize) {
+    set_curser(x, y);
 }

@@ -1,5 +1,5 @@
 #[repr(C, packed(1))]
-pub struct Queue<T: Copy + 'static> {
+pub struct StaticQueue<T: Copy + 'static> {
     max_count: usize,
 
     buffer: &'static mut [T],
@@ -9,7 +9,7 @@ pub struct Queue<T: Copy + 'static> {
     last_operation_put: bool
 }
 
-impl<T: Copy + 'static> Queue<T> {
+impl<T: Copy + 'static> StaticQueue<T> {
     pub fn new(size: usize, buffer: &'static mut [T]) -> Self {
         Self{
             max_count: size,
@@ -43,4 +43,4 @@ impl<T: Copy + 'static> Queue<T> {
     }
 }
 
-unsafe impl<T: Copy + 'static> Sync for Queue<T>{}
+unsafe impl<T: Copy + 'static> Sync for StaticQueue<T>{}

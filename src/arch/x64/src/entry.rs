@@ -1,4 +1,4 @@
-use crate::{assembly::{self, EnableInterrupt}, descriptor, interrupt::keyboard, keyboard, pic::{InitializePIC, MaskedPICInterrupt}, print_string, println};
+use crate::{assembly::{self, EnableInterrupt}, console, descriptor, keyboard, pic::{InitializePIC, MaskedPICInterrupt}, print, print_string, shell::start_shell};
 
 #[allow(unconditional_panic)]
 pub fn entry() {
@@ -36,15 +36,6 @@ pub fn entry() {
 	EnableInterrupt();
 	print_string(45, 16, b"Pass");
 
-	println!("hello, world!");
-
-	loop {
-		let mut key_data: keyboard::KeyData = keyboard::KeyData::new();
-		if keyboard::GetKeyFromKeyQueue(&mut key_data) {
-			if (key_data.Flags & keyboard::KeyStatement::KeyFlagsDown as u8) != 0 {
-				print_string(i, 17, &[key_data.ASCIICode]);
-				i += 1;
-			}
-		}
-	}
+	console::init_console(0, 17);
+	start_shell();
 }
