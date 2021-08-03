@@ -2,8 +2,6 @@ use crate::{assembly::{self, EnableInterrupt}, console, descriptor, keyboard, pi
 
 #[allow(unconditional_panic)]
 pub fn entry() {
-	let mut i = 0;
-
 	print_string(0, 10, b"Swtich to IA-32e Mode.......................[Pass]");
 	print_string(0, 11, b"IA-32e Rust Kernel Start....................[Pass]");
 

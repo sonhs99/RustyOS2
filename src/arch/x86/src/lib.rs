@@ -88,8 +88,8 @@ fn init_kernel64_area() -> bool {
 	let size: u32 = 0x600000 - (base_address as u32); 
 	for i in 0..(size/4) {
 		unsafe {
-			*base_address.offset(i as isize) = 0x00;
-			if *base_address.offset(i as isize) != 0x00 {
+			*base_address.offset(i as isize) = 0xFEEBFEEB;
+			if *base_address.offset(i as isize) != 0xFEEBFEEB {
 				return false;
 			}
 		}
@@ -115,11 +115,10 @@ fn copy_kernel64_image_to_2mbyte() {
 	let total_kernel_sector_count: u16 = unsafe { *( 0x7c05 as *mut u16 ) };
 	let kernel32_sector_count: u16 = unsafe { *( 0x7c07 as *mut u16 ) };
 
-
 	let source_address = (0x10000 + (kernel32_sector_count as u32) * 512 ) as *mut u32;
 	let destination_address = 0x200000 as *mut u32;
 
-	let size = 512 * ( total_kernel_sector_count - kernel32_sector_count ) / 4;
+	let size = 512 * (( total_kernel_sector_count - kernel32_sector_count ) as u32) / 4;
 	let mut data: u32;
 	for i in 0..size {
 		unsafe { 
