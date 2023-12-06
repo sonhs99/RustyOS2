@@ -4,8 +4,8 @@ use spin::Mutex;
 
 use crate::{assembly::OutPortByte, keyboard, print_string};
 
-const VGA_PORT_INDEX:       u16 = 0x3D4;
-const VGA_PORT_DATA:        u16 = 0x3D5;
+const VGA_PORT_INDEX: u16 = 0x3D4;
+const VGA_PORT_DATA: u16 = 0x3D5;
 const VGA_INDEX_UPPERCURSER: u8 = 0x0E;
 const VGA_INDEX_LOWERCURSER: u8 = 0x0F;
 
@@ -43,7 +43,7 @@ impl ColorCode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
-struct ScreenChar{
+struct ScreenChar {
     ascii_character: u8,
     color_code: ColorCode,
 }
@@ -56,14 +56,14 @@ struct Buffer {
     chars: [ScreenChar; BUFFER_WIDTH * BUFFER_HEIGHT],
 }
 
-pub struct Writer{
+pub struct Writer {
     column_position: usize,
     color_code: ColorCode,
-    buffer: &'static mut Buffer
+    buffer: &'static mut Buffer,
 }
 
-impl Writer{
-    pub fn write_byte(&mut self, byte:u8){
+impl Writer {
+    pub fn write_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => self.new_line(),
             byte => {
@@ -79,23 +79,26 @@ impl Writer{
         }
     }
 
-    pub fn write_string(&mut self, s: &str){
+    pub fn write_string(&mut self, s: &str) {
         for byte in s.bytes() {
             match byte {
                 0x20..=0x7e | b'\n' => self.write_byte(byte),
-                _ => self.write_byte(0xfe)
+                _ => self.write_byte(0xfe),
             }
         }
-        self.set_curser(self.column_position % BUFFER_WIDTH, self.column_position / BUFFER_WIDTH);
+        self.set_curser(
+            self.column_position % BUFFER_WIDTH,
+            self.column_position / BUFFER_WIDTH,
+        );
     }
 
     fn new_line(&mut self) {
         // print_string(0, 24, b"a");
-		if self.column_position <= BUFFER_WIDTH * (BUFFER_HEIGHT - 1) - 1 {
+        if self.column_position <= BUFFER_WIDTH * (BUFFER_HEIGHT - 1) - 1 {
             self.column_position += BUFFER_WIDTH - (self.column_position % BUFFER_WIDTH);
-			return;
+            return;
         }
-		self.column_position -= BUFFER_WIDTH;
+        self.column_position -= BUFFER_WIDTH;
         for row in 1..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
                 let character = self.buffer.chars[row * BUFFER_WIDTH + col];
@@ -106,8 +109,8 @@ impl Writer{
         self.column_position = (BUFFER_HEIGHT - 1) * BUFFER_WIDTH;
     }
 
-    fn clear_row(&mut self, row: usize){
-        let blank = ScreenChar{
+    fn clear_row(&mut self, row: usize) {
+        let blank = ScreenChar {
             ascii_character: b' ',
             color_code: self.color_code,
         };
@@ -116,15 +119,15 @@ impl Writer{
         }
     }
 
-	pub fn clear_screen(&mut self){
-		for i in 0..(BUFFER_HEIGHT * BUFFER_WIDTH) {
-			self.buffer.chars[i] = ScreenChar{
-				ascii_character: b' ',
-				color_code: self.color_code
-			}
-		}
-		self.set_curser(0, 0);
-	}
+    pub fn clear_screen(&mut self) {
+        for i in 0..(BUFFER_HEIGHT * BUFFER_WIDTH) {
+            self.buffer.chars[i] = ScreenChar {
+                ascii_character: b' ',
+                color_code: self.color_code,
+            }
+        }
+        self.set_curser(0, 0);
+    }
 
     pub fn set_curser(&mut self, x: usize, y: usize) {
         let linear = y * BUFFER_WIDTH + x;
@@ -138,7 +141,10 @@ impl Writer{
     }
 
     pub fn get_curser(&self) -> (usize, usize) {
-        (self.column_position % BUFFER_WIDTH, self.column_position / BUFFER_WIDTH)
+        (
+            self.column_position % BUFFER_WIDTH,
+            self.column_position / BUFFER_WIDTH,
+        )
     }
 }
 
@@ -149,7 +155,7 @@ impl fmt::Write for Writer {
     }
 }
 
-lazy_static!{
+lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         column_position: 0,
         color_code: ColorCode::new(Color::LightGreen, Color::Black),
@@ -182,7 +188,7 @@ pub fn clear_screen() {
 pub fn getch() -> u8 {
     let mut key_data: keyboard::KeyData = keyboard::KeyData::new();
     loop {
-        while !keyboard::GetKeyFromKeyQueue(&mut key_data) {};
+        while !keyboard::GetKeyFromKeyQueue(&mut key_data) {}
         if (key_data.Flags & keyboard::KeyStatement::KeyFlagsDown as u8) != 0 {
             return key_data.ASCIICode;
         }
@@ -197,6 +203,6 @@ pub fn get_curser() -> (usize, usize) {
     WRITER.lock().get_curser()
 }
 
-pub fn init_console(x:usize, y: usize) {
+pub fn init_console(x: usize, y: usize) {
     set_curser(x, y);
 }
