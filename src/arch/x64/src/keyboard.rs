@@ -1,11 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use lazy_static::lazy_static;
-use spin::Mutex;
+use spin::{Mutex, Once};
 
 use crate::{
     assembly::{InPortByte, OutPortByte},
+    println,
     types::StaticQueue,
     utility::set_interrupt_flag,
 };
@@ -99,22 +99,16 @@ struct KeyboardManager {
 }
 
 pub fn IsOutputBufferFull() -> bool {
-    if (InPortByte(0x64) & 0x01) != 0 {
-        return true;
-    }
-    return false;
+    (InPortByte(0x64) & 0x01) != 0
 }
 
 pub fn IsInputBufferFull() -> bool {
-    if (InPortByte(0x64) & 0x02) != 0 {
-        return true;
-    }
-    return false;
+    (InPortByte(0x64) & 0x02) != 0
 }
 
 pub fn WaitForACKAndPutOtherScanCode() -> bool {
     let mut result = false;
-    for _ in 0..100 {
+    for _ in 0..1000 {
         for _ in 0..0xFFFF {
             if IsOutputBufferFull() {
                 break;
@@ -141,19 +135,9 @@ pub fn ActiveKeyboard() -> bool {
     }
     OutPortByte(0x60, 0xF4);
 
-    for _ in 0..100 {
-        for _ in 0..0xFFFF {
-            if IsOutputBufferFull() {
-                break;
-            }
-        }
-        if InPortByte(0x60) == 0xFA {
-            return true;
-        }
-    }
     let result = WaitForACKAndPutOtherScanCode();
     set_interrupt_flag(previous_interrupt);
-    return result;
+    result
 }
 
 pub fn GetKeyboardScanCode() -> u8 {
@@ -245,12 +229,11 @@ static mut KeyBuffer: [KeyData; KEY_MAXQUEUECOUNT] = [KeyData {
     ASCIICode: 0,
     Flags: 0,
 }; 100];
-lazy_static! {
-    static ref KeyQueue: Mutex<StaticQueue<KeyData>> =
-        Mutex::new(StaticQueue::new(KEY_MAXQUEUECOUNT, unsafe {
-            &mut KeyBuffer
-        }));
-}
+
+static mut KeyQueue: Once<Mutex<StaticQueue<KeyData>>> = Once::new();
+// Mutex::new(StaticQueue::new(KEY_MAXQUEUECOUNT, unsafe {
+//     &mut KeyBuffer
+// }));
 
 static KeyMappingTable: [KeyMappingEntry; KEY_MAPPINGTABLEMAXCOUNT] = [
     /*  0   */ KeyMappingEntry(KeySpecial::None as u8, KeySpecial::None as u8),
@@ -471,6 +454,9 @@ pub fn ConvertScanCodeToASCIICode(ScanCode: u8, ASCIICode: &mut u8, Flags: &mut 
 }
 
 pub fn InitializeKeyboard() -> bool {
+    unsafe {
+        KeyQueue.call_once(|| Mutex::new(StaticQueue::new(KEY_MAXQUEUECOUNT, &mut KeyBuffer)));
+    }
     ActiveKeyboard()
 }
 
@@ -485,28 +471,30 @@ pub fn ConvertScanCodeAndPutQueue(ScanCode: u8) -> bool {
     if ConvertScanCodeToASCIICode(ScanCode, &mut key_data.ASCIICode, &mut key_data.Flags) {
         let previous_interrupt = set_interrupt_flag(false);
         unsafe {
-            KeyQueue.force_unlock();
+            KeyQueue.get_mut().unwrap().force_unlock();
+            result = KeyQueue.get_mut().unwrap().lock().enqueue(&mut key_data);
         }
-        result = KeyQueue.lock().enqueue(&mut key_data);
         set_interrupt_flag(previous_interrupt);
     }
     result
 }
 
 pub fn GetKeyFromKeyQueue(data: &mut KeyData) -> bool {
-    if KeyQueue.lock().is_empty() {
-        return true;
-    }
-    let previous_interrupt = set_interrupt_flag(false);
-    let result = KeyQueue.lock().dequeue();
-    set_interrupt_flag(previous_interrupt);
-    match result {
-        Ok(res) => {
-            *data = res;
+    unsafe {
+        if KeyQueue.get_mut().unwrap().lock().is_empty() {
             return true;
         }
-        Err(()) => {
-            return false;
+        let previous_interrupt = set_interrupt_flag(false);
+        let result = KeyQueue.get_mut().unwrap().lock().dequeue();
+        set_interrupt_flag(previous_interrupt);
+        match result {
+            Ok(res) => {
+                *data = res;
+                return true;
+            }
+            Err(()) => {
+                return false;
+            }
         }
     }
 }

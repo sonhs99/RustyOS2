@@ -2,44 +2,62 @@ use crate::{
     assembly::{self, EnableInterrupt},
     console, descriptor, keyboard,
     pic::{InitializePIC, MaskedPICInterrupt},
-    print, print_string,
+    println,
     shell::start_shell,
+    utility::{check_ram_size, get_ram_size},
 };
 
 #[allow(unconditional_panic)]
 pub fn entry() {
-    print_string(0, 10, b"Swtich to IA-32e Mode.......................[Pass]");
-    print_string(0, 11, b"IA-32e Rust Kernel Start....................[Pass]");
+    console::init_console(0, 10);
+    println!("Swtich to IA-32e Mode.......................[Pass]");
+    println!("IA-32e Rust Kernel Start....................[Pass]");
 
-    print_string(0, 12, b"GDT Initialize And Switch For IA-32e Mode...[    ]");
+    let (_, mut y) = console::get_curser();
+
+    println!("GDT Initialize And Switch For IA-32e Mode...[    ]");
     descriptor::InitializeGDTTableAndTTS();
     assembly::LoadGDTR(descriptor::GDTR_STARTADDRESS);
-    print_string(45, 12, b"Pass");
+    console::set_curser(45, y);
+    y += 1;
+    println!("Pass");
 
-    print_string(0, 13, b"TSS Segment Load............................[    ]");
+    println!("TSS Segment Load............................[    ]");
     assembly::LoadTR(descriptor::GDT_TSSSEGMENT);
-    print_string(45, 13, b"Pass");
+    console::set_curser(45, y);
+    y += 1;
+    println!("Pass");
 
-    print_string(0, 14, b"IDT Initialize..............................[    ]");
+    println!("IDT Initialize..............................[    ]");
     descriptor::InitializeIDTTables();
     assembly::LoadIDTR(descriptor::IDTR_STARTADDRESS);
-    print_string(45, 14, b"Pass");
+    console::set_curser(45, y);
+    y += 1;
+    println!("Pass");
 
-    print_string(0, 15, b"Keyboard Activate And Queue Initialize......[    ]");
+    println!("Total RAM Size Check........................[    ]");
+    check_ram_size();
+    console::set_curser(45, y);
+    y += 1;
+    println!("Pass], {} MB", get_ram_size());
+
+    println!("Keyboard Activate And Queue Initialize......[    ]");
+    console::set_curser(45, y);
     if keyboard::InitializeKeyboard() {
-        print_string(45, 15, b"Pass");
+        println!("Pass");
         keyboard::ChangeKeyboardLED(false, false, false);
     } else {
-        print_string(45, 15, b"Fail");
+        println!("Fail");
         loop {}
     }
+    y += 1;
 
-    print_string(0, 16, b"PIC Controller And Interrupt Initialize.....[    ]");
+    println!("PIC Controller And Interrupt Initialize.....[    ]");
     InitializePIC();
     MaskedPICInterrupt(0);
     EnableInterrupt();
-    print_string(45, 16, b"Pass");
+    console::set_curser(45, y);
+    println!("Pass");
 
-    console::init_console(0, 17);
     start_shell();
 }

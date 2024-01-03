@@ -1,8 +1,7 @@
 use core::fmt;
-use lazy_static::lazy_static;
-use spin::Mutex;
+use spin::{Mutex, Once};
 
-use crate::{assembly::OutPortByte, keyboard, print_string};
+use crate::{assembly::OutPortByte, keyboard};
 
 const VGA_PORT_INDEX: u16 = 0x3D4;
 const VGA_PORT_DATA: u16 = 0x3D5;
@@ -93,7 +92,6 @@ impl Writer {
     }
 
     fn new_line(&mut self) {
-        // print_string(0, 24, b"a");
         if self.column_position <= BUFFER_WIDTH * (BUFFER_HEIGHT - 1) - 1 {
             self.column_position += BUFFER_WIDTH - (self.column_position % BUFFER_WIDTH);
             return;
@@ -155,13 +153,7 @@ impl fmt::Write for Writer {
     }
 }
 
-lazy_static! {
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-        column_position: 0,
-        color_code: ColorCode::new(Color::LightGreen, Color::Black),
-        buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-    });
-}
+pub static mut WRITER: Once<Mutex<Writer>> = Once::new();
 
 #[macro_export]
 macro_rules! print {
@@ -177,12 +169,12 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    WRITER.lock().write_fmt(args).unwrap();
+    unsafe { WRITER.get_mut_unchecked().lock().write_fmt(args).unwrap() };
 }
 
 #[doc(hidden)]
 pub fn clear_screen() {
-    WRITER.lock().clear_screen();
+    unsafe { WRITER.get_mut_unchecked().lock().clear_screen() };
 }
 
 pub fn getch() -> u8 {
@@ -196,13 +188,22 @@ pub fn getch() -> u8 {
 }
 
 pub fn set_curser(x: usize, y: usize) {
-    WRITER.lock().set_curser(x, y);
+    unsafe { WRITER.get_mut_unchecked().lock().set_curser(x, y) };
 }
 
 pub fn get_curser() -> (usize, usize) {
-    WRITER.lock().get_curser()
+    unsafe { return WRITER.get_unchecked().lock().get_curser() };
 }
 
 pub fn init_console(x: usize, y: usize) {
-    set_curser(x, y);
+    unsafe {
+        WRITER.call_once(|| {
+            Mutex::new(Writer {
+                column_position: 0,
+                color_code: ColorCode::new(Color::White, Color::Black),
+                buffer: &mut *(0xb8000 as *mut Buffer),
+            })
+        })
+    };
+    set_curser(x, y)
 }

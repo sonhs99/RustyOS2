@@ -5,12 +5,11 @@ pub fn InPortByte(port: u16) -> u8 {
     let mut output: u8;
     unsafe {
         asm!(
-            "mov rdx, {0}
-			 mov rax, 0
-			 in al, dx
-			 mov {1}, al",
-             in(reg) (port as u64),
-             out(reg_byte) output
+            "mov rax, 0
+             in al, dx",
+             in("rdx") (port as u64),
+             out("al") output,
+             options(nostack, preserves_flags)
         );
     }
     return output;
@@ -19,11 +18,10 @@ pub fn InPortByte(port: u16) -> u8 {
 pub fn OutPortByte(port: u16, data: u8) {
     unsafe {
         asm!(
-            "mov rdx, {0}
-			 mov rax, {1}
-			 out dx, al",
-             in(reg) (port as u64),
-             in(reg) (data as u64)
+            "out dx, al",
+             in("rdx") (port as u64),
+             in("rax") (data as u64),
+             options(nostack, preserves_flags)
         );
     }
 }
@@ -83,4 +81,18 @@ pub fn ReadRFLAGS() -> u64 {
         );
     }
     flag
+}
+
+pub fn read_TSC() -> u64 {
+    let mut rax: u64;
+    let mut rdx: u64;
+    unsafe {
+        asm!(
+            "rdtsc",
+            out("rax") rax,
+            out("rdx") rdx,
+            // options(nostack, preserves_flags)
+        );
+    }
+    rdx << 32 | rax >> 32
 }

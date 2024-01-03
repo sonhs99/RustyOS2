@@ -7,7 +7,7 @@ pub mod mode_switch;
 pub mod page;
 use core::arch::asm;
 use core::panic::PanicInfo;
-use mode_switch::{kReadCPUID, kSwitchAndExecute64BitKernel};
+use mode_switch::{kSwitchAndExecute64BitKernel, read_cpuid};
 
 #[no_mangle] // don't mangle the name of this function
 pub extern "C" fn _start() -> ! {
@@ -39,24 +39,20 @@ pub extern "C" fn _start() -> ! {
     }
     print_string(45, 6, b"Pass");
 
-    let (mut EAX, mut EBX, mut ECX, mut EDX): (u32, u32, u32, u32) = (0, 0, 0, 0);
-    unsafe {
-        kReadCPUID(0x00, &mut EAX, &mut EBX, &mut ECX, &mut EDX);
-    }
+    let cpuid_result = read_cpuid(0, 0);
+
     print_string(
         0,
         7,
         b"Proccessor Vendor String....................[            ]",
     );
-    print_string(45, 7, &u32_to_u8_array(EBX));
-    print_string(49, 7, &u32_to_u8_array(EDX));
-    print_string(53, 7, &u32_to_u8_array(ECX));
+    print_string(45, 7, &u32_to_u8_array(cpuid_result.ebx));
+    print_string(49, 7, &u32_to_u8_array(cpuid_result.edx));
+    print_string(53, 7, &u32_to_u8_array(cpuid_result.ecx));
 
-    unsafe {
-        kReadCPUID(0x00, &mut EAX, &mut EBX, &mut ECX, &mut EDX);
-    }
+    let cpuid_result = read_cpuid(0x8000_0001, 0);
     print_string(0, 8, b"64bit Mode Support Check....................[    ]");
-    if (EDX & (1 << 29)) != 0 {
+    if (cpuid_result.edx & (1 << 29)) != 0 {
         print_string(45, 8, b"Pass");
     } else {
         print_string(45, 8, b"Fail");

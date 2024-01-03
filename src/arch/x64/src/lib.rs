@@ -2,6 +2,7 @@
 #![feature(abi_x86_interrupt)]
 #![feature(const_mut_refs)]
 #![feature(ascii_char)]
+#![feature(naked_functions)]
 
 use core::arch::asm;
 use core::panic::PanicInfo;
@@ -14,6 +15,7 @@ pub mod interrupt;
 pub mod keyboard;
 pub mod pic;
 pub mod shell;
+pub mod timer;
 pub mod types;
 pub mod utility;
 
@@ -30,7 +32,8 @@ pub unsafe extern "C" fn Main() -> ! {
 
 			mov ss, ax
 			mov rsp, 0x6FFFF8
-			mov rbp, 0x6FFFF8"
+			mov rbp, 0x6FFFF8",
+        options(nostack)
     );
 
     entry::entry();
