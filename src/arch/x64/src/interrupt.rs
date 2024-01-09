@@ -1,8 +1,8 @@
-#![feature(const_raw_ptr_to_usize_cast)]
 use crate::{
     keyboard::{ConvertScanCodeAndPutQueue, GetKeyboardScanCode, IsOutputBufferFull},
     pic::{self, SendEOI},
-    print_string,
+    print_string, process,
+    utility::set_interrupt_flag,
 };
 
 pub extern "x86-interrupt" fn divided_by_zero() {
@@ -44,7 +44,7 @@ pub extern "x86-interrupt" fn segment_not_present() {
 pub extern "x86-interrupt" fn stack_segment_fault() {
     CommonExceptionHandler(12);
 }
-pub extern "x86-interrupt" fn general_protecton() {
+pub extern "x86-interrupt" fn general_protection() {
     CommonExceptionHandler(13);
 }
 pub extern "x86-interrupt" fn page_fault() {
@@ -69,8 +69,65 @@ pub extern "x86-interrupt" fn common_exception() {
     CommonExceptionHandler(20);
 }
 
-pub extern "x86-interrupt" fn timer() {
-    CommonInterruptHandler(32);
+#[naked]
+pub fn timer() {
+    use core::arch::asm;
+    unsafe {
+        asm!(
+        "push rbp",
+        "push rax",
+        "push rbx",
+        "push rcx",
+        "push rdx",
+        "push rdi",
+        "push rsi",
+        "push r8",
+        "push r9",
+        "push r10",
+        "push r11",
+        "push r12",
+        "push r13",
+        "push r14",
+        "push r15",
+        "mov ax, ds",
+        "push rax",
+        "mov ax, es",
+        "push rax",
+        "mov ax, fs",
+        "push rax",
+        "mov ax, gs",
+        "push rax",
+        
+        "mov rdi, 32",
+        "call {func}",
+
+        "pop rax",
+        "mov gs, ax",
+        "pop rax",
+        "mov fs, ax",
+        "pop rax",
+        "mov es, ax",
+        "pop rax",
+        "mov ds, ax",
+        "pop r15",
+        "pop r14",
+        "pop r13",
+        "pop r12",
+        "pop r11",
+        "pop r10",
+        "pop r9",
+        "pop r8",
+        "pop rsi",
+        "pop rdi",
+        "pop rdx",
+        "pop rcx",
+        "pop rbx",
+        "pop rax",
+        "pop rbp",
+        "iretq",
+        func = sym TimerHandler,
+        options(noreturn));
+    }
 }
 pub extern "x86-interrupt" fn keyboard() {
     KeyboardHandler(33);
@@ -159,6 +216,25 @@ fn CommonInterruptHandler(vector: u8) {
     SendEOI((vector - pic::PIC_IRQSTARTVECTOR) as u16);
 }
 
+fn TimerHandler(vector: u8) {
+    let mut buffer = b"[INT:  , ]".clone();
+    static mut common_count: u8 = 0;
+    buffer[5] = vector / 10 + '0' as u8;
+    buffer[6] = vector % 10 + '0' as u8;
+    unsafe {
+        buffer[8] = common_count + '0' as u8;
+        common_count = (common_count + 1) % 10;
+    }
+    print_string(70, 0, &buffer);
+
+    SendEOI((vector - pic::PIC_IRQSTARTVECTOR) as u16);
+
+    process::decrease_time();
+    if process::is_expired() {
+        process::schedule();
+    }
+}
+
 fn KeyboardHandler(vector: u8) {
     let mut buffer = b"[INT:  , ]".clone();
     static mut keyboard_count: u8 = 0;
@@ -176,4 +252,13 @@ fn KeyboardHandler(vector: u8) {
     }
 
     SendEOI((vector - pic::PIC_IRQSTARTVECTOR) as u16);
+}
+
+pub fn without_interrupt<F>(mut f: F)
+where
+    F: FnMut(),
+{
+    let previous_flag = set_interrupt_flag(false);
+    f();
+    set_interrupt_flag(previous_flag);
 }

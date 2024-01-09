@@ -1,9 +1,14 @@
-use crate::assembly::{InPortByte, OutPortByte};
+use crate::{
+    assembly::{InPortByte, OutPortByte},
+    print,
+};
 
 const PIT_FREQUENCY: u64 = 1193180;
 
-const PIT_PORT_CONTROL: u16 = 0x43;
 const PIT_PORT_COUNTER0: u16 = 0x40;
+const PIT_PORT_COUNTER1: u16 = 0x41;
+const PIT_PORT_COUNTER2: u16 = 0x42;
+const PIT_PORT_CONTROL: u16 = 0x43;
 
 const PIT_CONTROL_COUNTER0: u8 = 0x00;
 const PIT_CONTROL_LSBMSBRW: u8 = 0x30;
@@ -17,6 +22,7 @@ const PIT_COUNTER0_ONCE: u8 =
     PIT_CONTROL_COUNTER0 | PIT_CONTROL_LSBMSBRW | PIT_CONTROL_MODE0 | PIT_CONTROL_BINARYCOUNTER;
 const PIT_COUNTER0_PERIODIC: u8 =
     PIT_CONTROL_COUNTER0 | PIT_CONTROL_LSBMSBRW | PIT_CONTROL_MODE2 | PIT_CONTROL_BINARYCOUNTER;
+const PIT_COUNTER0_LATCH: u8 = PIT_CONTROL_COUNTER0 | PIT_CONTROL_LATCH;
 
 pub fn convert_from_ms(time: u64) -> u64 {
     PIT_FREQUENCY * time / 1000
@@ -35,8 +41,8 @@ pub fn init_PIT(count: u16, periodic: bool) {
     OutPortByte(PIT_PORT_COUNTER0, (count >> 8) as u8);
 }
 
-pub fn read_counter0() -> u16 {
-    OutPortByte(PIT_PORT_COUNTER0, PIT_CONTROL_LATCH);
+fn read_counter0() -> u16 {
+    OutPortByte(PIT_PORT_CONTROL, PIT_COUNTER0_LATCH);
     let low_byte = InPortByte(PIT_PORT_COUNTER0) as u16;
     let high_byte = InPortByte(PIT_PORT_COUNTER0) as u16;
     low_byte | (high_byte << 8)

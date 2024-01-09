@@ -3,7 +3,9 @@ use crate::{
     console, descriptor, keyboard,
     pic::{InitializePIC, MaskedPICInterrupt},
     println,
+    process::{self, create_task, init_scheduler},
     shell::start_shell,
+    timer::{convert_from_ms, init_PIT},
     utility::{check_ram_size, get_ram_size},
 };
 
@@ -41,6 +43,11 @@ pub fn entry() {
     y += 1;
     println!("Pass], {} MB", get_ram_size());
 
+    println!("PCB Pool And Scheduler Initialize...........[Pass]");
+    init_scheduler();
+    init_PIT(convert_from_ms(1) as u16, true);
+    y += 1;
+
     println!("Keyboard Activate And Queue Initialize......[    ]");
     console::set_curser(45, y);
     if keyboard::InitializeKeyboard() {
@@ -59,5 +66,6 @@ pub fn entry() {
     console::set_curser(45, y);
     println!("Pass");
 
+    create_task(process::PRIORITY_LOWIST, process::idle_process as u64);
     start_shell();
 }

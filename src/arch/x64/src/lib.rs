@@ -14,6 +14,7 @@ pub mod entry;
 pub mod interrupt;
 pub mod keyboard;
 pub mod pic;
+pub mod process;
 pub mod shell;
 pub mod timer;
 pub mod types;

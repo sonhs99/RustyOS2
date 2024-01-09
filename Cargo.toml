@@ -5,9 +5,12 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-positioned-io = "0.2"
+positioned-io = "0.3.3"
 x86 = { path = "./src/arch/x86" }
 x64 = { path = "./src/arch/x64" }
+
+[build-dependencies]
+walkdir = "2"
 
 [profile.dev]
 panic = "abort"

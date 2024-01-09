@@ -1,17 +1,19 @@
-use core::str;
+use core::{hint::black_box, str};
 
 use crate::{
+    assembly::{read_TSC, DisableInterrupt, EnableInterrupt},
     console::{clear_screen, get_curser, getch, set_curser},
     keyboard::{KeySpecial, Reboot},
     print, print_string, println,
-    timer::{Date, Time},
+    process::{self, create_task, process_count, PRIORITY_HIGHIST, PRIORITY_LOWIST},
+    timer::{convert_from_ms, init_PIT, wait, wait_using_PIT, Date, Time},
     utility::{get_ram_size, memset},
 };
 
 const CONSOLE_MAXCOMMANDBUFFERSIZE: usize = 300;
 const CONSOLE_PROMPT: &'static str = ">";
 
-type CommandFunc = fn(&Parameter);
+type CommandFunc = fn(&mut Parameter);
 
 #[repr(C)]
 struct Command {
@@ -51,9 +53,34 @@ static COMMAND_TABLE: &[Command] = &[
         command_function: set_timer,
     },
     Command {
+        command: "wait",
+        help: "Wait ms Using PIT",
+        command_function: wait_PIT,
+    },
+    Command {
+        command: "cpuspeed",
+        help: "Measure CPU Speed",
+        command_function: measure_cpu_speed,
+    },
+    Command {
         command: "date",
         help: "Show Current Date and time",
         command_function: show_date_and_time,
+    },
+    Command {
+        command: "createtask",
+        help: "Create Test Task",
+        command_function: test_create_task,
+    },
+    Command {
+        command: "checktask",
+        help: "Check Task",
+        command_function: check_task,
+    },
+    Command {
+        command: "kill",
+        help: "Kill Task",
+        command_function: kill_task,
     },
 ];
 
@@ -117,33 +144,33 @@ fn execute_command(buffer: &str) {
     };
     for command in COMMAND_TABLE {
         if command.command == com {
-            let args = Parameter::new(args, " ");
-            (command.command_function)(&args);
+            let mut args = Parameter::new(args, " ");
+            (command.command_function)(&mut args);
             break;
         }
     }
 }
 
-fn sHelp(_args: &Parameter) {
+fn sHelp(_args: &mut Parameter) {
     println!("\n      ---   Shell Command List   ---\n");
     for command in COMMAND_TABLE {
         println!("{:10} {}", command.command, command.help);
     }
 }
-fn sCls(_args: &Parameter) {
+fn sCls(_args: &mut Parameter) {
     clear_screen();
 }
-fn sTotalRAMSize(_args: &Parameter) {
+fn sTotalRAMSize(_args: &mut Parameter) {
     println!("Total RAM Size: {} MB", get_ram_size());
 }
-fn kShutdown(_args: &Parameter) {
+fn kShutdown(_args: &mut Parameter) {
     println!("System Shutdown start...");
     println!("Press Any Key To Reboot PC");
     getch();
     Reboot();
 }
 
-fn show_date_and_time(_args: &Parameter) {
+fn show_date_and_time(_args: &mut Parameter) {
     let date = Date::current();
     let time = Time::current();
 
@@ -160,14 +187,158 @@ fn show_date_and_time(_args: &Parameter) {
     );
 }
 
-fn set_timer(args: &Parameter) {}
+fn set_timer(args: &mut Parameter) {
+    let count: u64 = match args.next() {
+        Some(string) => match string.parse() {
+            Ok(value) => value,
+            Err(_) => {
+                println!("settimer [ms] [0|1]");
+                return;
+            }
+        },
+        None => {
+            println!("settimer [ms] [0|1]");
+            return;
+        }
+    };
+    let periodic: u64 = match args.next() {
+        Some(string) => match string.parse() {
+            Ok(value) => value,
+            Err(_) => {
+                println!("settimer [ms] [0|1]");
+                return;
+            }
+        },
+        None => {
+            println!("settimer [ms] [0|1]");
+            return;
+        }
+    };
+    println!("{}", convert_from_ms(count));
+    init_PIT(convert_from_ms(count) as u16, periodic > 0);
+    println!(
+        "Time = {} ms, Periodic = {}: Change Complete.",
+        count,
+        periodic > 0
+    );
+}
+
+fn wait_PIT(args: &mut Parameter) {
+    let milisecond: u64 = match args.next() {
+        Some(string) => match string.parse() {
+            Ok(value) => value,
+            Err(_) => {
+                println!("wait [ms]");
+                return;
+            }
+        },
+        None => {
+            println!("wait [ms]");
+            return;
+        }
+    };
+    println!("{} ms Sleep Start...", milisecond);
+    DisableInterrupt();
+    wait(milisecond);
+    EnableInterrupt();
+    println!("{} ms Sleep Complete.", milisecond);
+}
+
+fn measure_cpu_speed(_args: &mut Parameter) {
+    print!("Now Measuring");
+    DisableInterrupt();
+    let mut total = 0;
+    for _ in 0..200 {
+        let current = read_TSC();
+        wait_using_PIT(convert_from_ms(50) as u16);
+        total += read_TSC() - current;
+        print!(".");
+    }
+    EnableInterrupt();
+    println!("\nCPU Speed = {} MHz", total / 10 / 1000 / 1000);
+}
+
+fn test_task() {
+    let mut i = 0;
+    let offset = process::get_pid() * 2;
+    let offset = 25 * 80 - (offset % (25 * 80));
+    let data = [b'-', b'\\', b'|', b'/'];
+    let vga = 0xb8000 as *mut u16;
+    // println!(
+    //     "[{:2X}] This is called from test_task, {}",
+    //     process::get_pid(),
+    //     i
+    // );
+    loop {
+        // println!(
+        //     "[{:2X}] This is called from test_task, {}",
+        //     process::get_pid(),
+        //     i
+        // );
+        let charactor = data[i % 4] as u16;
+        let attribute = ((offset % 15) + 1) as u16;
+        black_box(unsafe { *vga.offset(offset as isize) = charactor | attribute << 8 });
+        i += 1;
+    }
+    // println!(
+    //     "[{:2X}] This is called from test_task in the end, {}",
+    //     process::get_pid(),
+    //     i
+    // );
+}
+
+fn test_create_task(args: &mut Parameter) {
+    let count: u64 = match args.next() {
+        Some(string) => match string.parse() {
+            Ok(value) => value,
+            Err(_) => {
+                println!("createtask [count]");
+                return;
+            }
+        },
+        None => {
+            println!("createtask [count]");
+            return;
+        }
+    };
+    for _ in 0..count {
+        if let Err(_) = create_task(PRIORITY_HIGHIST, test_task as u64) {
+            break;
+        }
+    }
+}
+
+fn check_task(_args: &mut Parameter) {
+    println!("Total Task: {}", process_count());
+}
+
+fn kill_task(args: &mut Parameter) {
+    let pid: u64 = match args.next() {
+        Some(string) => match string.parse() {
+            Ok(value) => value,
+            Err(_) => {
+                println!("kill [pid]");
+                return;
+            }
+        },
+        None => {
+            println!("kill [pid]");
+            return;
+        }
+    };
+    if process::is_process_exist(pid) {
+        println!("there are no Process [0x{pid:X}]");
+    } else {
+        process::end_process(pid);
+    }
+}
 
 impl<'a> Parameter<'a> {
     pub fn new(args: &'a str, delim: &'a str) -> Self {
         Self { args, delim }
     }
 
-    pub fn next(mut self) -> Option<&'a str> {
+    pub fn next(&mut self) -> Option<&'a str> {
         if self.args == "" {
             return None;
         }

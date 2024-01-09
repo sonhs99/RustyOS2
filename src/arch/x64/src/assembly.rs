@@ -96,3 +96,9 @@ pub fn read_TSC() -> u64 {
     }
     rdx << 32 | rax >> 32
 }
+
+pub fn halt() {
+    unsafe {
+        asm!("hlt", "hlt");
+    }
+}

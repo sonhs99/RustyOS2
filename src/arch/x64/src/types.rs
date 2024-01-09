@@ -1,3 +1,9 @@
+use core::ptr::NonNull;
+
+use spin::{Mutex, MutexGuard};
+
+use crate::println;
+
 #[repr(C, packed(1))]
 pub struct StaticQueue<T: Copy + 'static> {
     max_count: usize,
@@ -6,17 +12,22 @@ pub struct StaticQueue<T: Copy + 'static> {
     put_index: usize,
     get_index: usize,
 
-    last_operation_put: bool
+    last_operation_put: bool,
 }
+
+// pub struct LinkedList<T> {
+//     head: Option<NonNull<T>>,
+//     tail: Option<NonNull<T>>,
+// }
 
 impl<T: Copy + 'static> StaticQueue<T> {
     pub fn new(size: usize, buffer: &'static mut [T]) -> Self {
-        Self{
+        Self {
             max_count: size,
             buffer: buffer,
             put_index: 0,
             get_index: 0,
-            last_operation_put: false
+            last_operation_put: false,
         }
     }
 
@@ -28,19 +39,23 @@ impl<T: Copy + 'static> StaticQueue<T> {
         (self.get_index == self.put_index) && !self.last_operation_put
     }
 
-    pub fn enqueue(&mut self, data: &T) -> bool {
-        if self.is_full() { return false; }
-        self.buffer[self.put_index] = *data;
+    pub fn enqueue(&mut self, data: T) -> bool {
+        if self.is_full() {
+            return false;
+        }
+        self.buffer[self.put_index] = data;
         self.put_index = (self.put_index + 1) % self.max_count;
         true
     }
 
     pub fn dequeue(&mut self) -> Result<T, ()> {
-        if self.is_empty() { return Err(()); }
+        if self.is_empty() {
+            return Err(());
+        }
         let data = self.buffer[self.get_index];
         self.get_index = (self.get_index + 1) % self.max_count;
-        Ok(data) 
+        Ok(data)
     }
 }
 
-unsafe impl<T: Copy + 'static> Sync for StaticQueue<T>{}
+unsafe impl<T: Copy + 'static> Sync for StaticQueue<T> {}

@@ -1,5 +1,5 @@
 use core::fmt;
-use spin::{Mutex, Once};
+use spin::{Lazy, Mutex};
 
 use crate::{assembly::OutPortByte, keyboard};
 
@@ -153,7 +153,13 @@ impl fmt::Write for Writer {
     }
 }
 
-pub static mut WRITER: Once<Mutex<Writer>> = Once::new();
+pub static WRITER: Lazy<Mutex<Writer>> = Lazy::new(|| {
+    Mutex::new(Writer {
+        column_position: 0,
+        color_code: ColorCode::new(Color::White, Color::Black),
+        buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
+    })
+});
 
 #[macro_export]
 macro_rules! print {
@@ -169,12 +175,12 @@ macro_rules! println {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
-    unsafe { WRITER.get_mut_unchecked().lock().write_fmt(args).unwrap() };
+    WRITER.lock().write_fmt(args).unwrap();
 }
 
 #[doc(hidden)]
 pub fn clear_screen() {
-    unsafe { WRITER.get_mut_unchecked().lock().clear_screen() };
+    WRITER.lock().clear_screen();
 }
 
 pub fn getch() -> u8 {
@@ -188,22 +194,13 @@ pub fn getch() -> u8 {
 }
 
 pub fn set_curser(x: usize, y: usize) {
-    unsafe { WRITER.get_mut_unchecked().lock().set_curser(x, y) };
+    WRITER.lock().set_curser(x, y);
 }
 
 pub fn get_curser() -> (usize, usize) {
-    unsafe { return WRITER.get_unchecked().lock().get_curser() };
+    return WRITER.lock().get_curser();
 }
 
 pub fn init_console(x: usize, y: usize) {
-    unsafe {
-        WRITER.call_once(|| {
-            Mutex::new(Writer {
-                column_position: 0,
-                color_code: ColorCode::new(Color::White, Color::Black),
-                buffer: &mut *(0xb8000 as *mut Buffer),
-            })
-        })
-    };
     set_curser(x, y)
 }

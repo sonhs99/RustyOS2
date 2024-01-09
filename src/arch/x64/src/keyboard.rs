@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(dead_code)]
 
-use spin::{Mutex, Once};
+use spin::{Lazy, Mutex};
 
 use crate::{
     assembly::{InPortByte, OutPortByte},
@@ -230,10 +230,11 @@ static mut KeyBuffer: [KeyData; KEY_MAXQUEUECOUNT] = [KeyData {
     Flags: 0,
 }; 100];
 
-static mut KeyQueue: Once<Mutex<StaticQueue<KeyData>>> = Once::new();
-// Mutex::new(StaticQueue::new(KEY_MAXQUEUECOUNT, unsafe {
-//     &mut KeyBuffer
-// }));
+static mut KeyQueue: Lazy<Mutex<StaticQueue<KeyData>>> = Lazy::new(|| {
+    Mutex::new(StaticQueue::new(KEY_MAXQUEUECOUNT, unsafe {
+        &mut KeyBuffer
+    }))
+});
 
 static KeyMappingTable: [KeyMappingEntry; KEY_MAPPINGTABLEMAXCOUNT] = [
     /*  0   */ KeyMappingEntry(KeySpecial::None as u8, KeySpecial::None as u8),
@@ -454,9 +455,6 @@ pub fn ConvertScanCodeToASCIICode(ScanCode: u8, ASCIICode: &mut u8, Flags: &mut 
 }
 
 pub fn InitializeKeyboard() -> bool {
-    unsafe {
-        KeyQueue.call_once(|| Mutex::new(StaticQueue::new(KEY_MAXQUEUECOUNT, &mut KeyBuffer)));
-    }
     ActiveKeyboard()
 }
 
@@ -471,8 +469,8 @@ pub fn ConvertScanCodeAndPutQueue(ScanCode: u8) -> bool {
     if ConvertScanCodeToASCIICode(ScanCode, &mut key_data.ASCIICode, &mut key_data.Flags) {
         let previous_interrupt = set_interrupt_flag(false);
         unsafe {
-            KeyQueue.get_mut().unwrap().force_unlock();
-            result = KeyQueue.get_mut().unwrap().lock().enqueue(&mut key_data);
+            KeyQueue.force_unlock();
+            result = KeyQueue.lock().enqueue(key_data);
         }
         set_interrupt_flag(previous_interrupt);
     }
@@ -481,11 +479,11 @@ pub fn ConvertScanCodeAndPutQueue(ScanCode: u8) -> bool {
 
 pub fn GetKeyFromKeyQueue(data: &mut KeyData) -> bool {
     unsafe {
-        if KeyQueue.get_mut().unwrap().lock().is_empty() {
+        if KeyQueue.lock().is_empty() {
             return true;
         }
         let previous_interrupt = set_interrupt_flag(false);
-        let result = KeyQueue.get_mut().unwrap().lock().dequeue();
+        let result = KeyQueue.lock().dequeue();
         set_interrupt_flag(previous_interrupt);
         match result {
             Ok(res) => {

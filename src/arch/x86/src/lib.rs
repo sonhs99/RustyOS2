@@ -118,8 +118,8 @@ fn is_memory_enough() -> bool {
 }
 
 fn copy_kernel64_image_to_2mbyte() {
-    let mut total_kernel_sector_count: u16 = 0;
-    let mut kernel32_sector_count: u16 = 0;
+    let total_kernel_sector_count: u16;
+    let kernel32_sector_count: u16;
     unsafe {
         asm!(
             "mov {0:x}, word ptr [0x7c05]",

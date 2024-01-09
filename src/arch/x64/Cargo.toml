@@ -9,8 +9,12 @@ crate-type = ["staticlib"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-spin = "0.9.8"
+
+[dependencies.spin]
+version = "0.9.8"
+features = ["lazy"]
 
 [profile.dev]
 overflow-checks = false
-opt-level = "z"
+debug = true
+opt-level = "s"

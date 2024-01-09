@@ -3,6 +3,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::Command;
 use std::{env, fs};
+use walkdir::WalkDir;
 
 fn main() {
     // Init build paths
@@ -65,16 +66,17 @@ fn build_kernel(source: &Path, root_target: &Path, arch: &str) {
         _ => "",
     };
 
-    let file_list = fs::read_dir(&src)
-        .expect("There are no 'arch/x86' directory")
-        .map(|entry| entry.unwrap().file_name());
+    let file_list = WalkDir::new(&src)
+        .into_iter()
+        .filter_map(|file| file.ok())
+        .map(|entry| entry.path().display().to_string());
     let mut entry_file = Vec::<String>::new();
     // let mut rust_file = Vec::<String>::new();
     let mut asm_file = Vec::<String>::new();
     let mut obj_file = Vec::<String>::new();
     for entry in file_list {
-        let file_name = entry.to_str().unwrap().to_string();
-        let ext: Vec<&str> = file_name.split(".").collect();
+        let file_path = entry;
+        let ext: Vec<&str> = file_path.split(".").collect();
 
         if ext.len() < 2 {
             continue;
@@ -83,13 +85,13 @@ fn build_kernel(source: &Path, root_target: &Path, arch: &str) {
         match ext[1] {
             "s" => {
                 if arch == "x64" {
-                    asm_file.push(format!("{}/{}", src.display(), file_name));
+                    asm_file.push(file_path);
                 } else {
-                    entry_file.push(format!("{}/{}", src.display(), file_name))
+                    entry_file.push(file_path)
                 }
             }
             // "rs" 	=> rust_file.push(format!("{}/{}", src.display(), file_name)),
-            "asm" => asm_file.push(format!("{}/{}", src.display(), file_name)),
+            "asm" => asm_file.push(file_path),
             _ => {}
         }
     }
@@ -193,7 +195,7 @@ fn merge_file(file_list: Vec<&str>, output_name: &str) {
 fn image_make(target: &Path, image_name: &str) {
     let mut output = File::create(image_name).unwrap();
     let mut buffer = [0u8; 512];
-    let mut offset = [0u8; 3];
+    let mut offset = [0u16; 3];
     let mut idx = 0;
     for (i, &file_name) in ["BootLoader.bin", "Kernelx86.bin", "Kernelx64.bin"]
         .iter()

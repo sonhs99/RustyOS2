@@ -1,9 +1,6 @@
 use core::hint::black_box;
 
-use crate::{
-    assembly::{DisableInterrupt, EnableInterrupt, ReadRFLAGS},
-    println,
-};
+use crate::assembly::{DisableInterrupt, EnableInterrupt, ReadRFLAGS};
 
 pub fn memset(dest: *mut u8, data: u8, size: isize) {
     for i in 0..size {
@@ -57,7 +54,7 @@ pub fn check_ram_size() {
             priv_value = *address;
 
             *address = MAGIC_NUMBER;
-            println!("{:X}", *address);
+            black_box(*address);
             if *address != MAGIC_NUMBER {
                 break;
             }
