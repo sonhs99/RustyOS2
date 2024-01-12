@@ -65,9 +65,7 @@ pub extern "C" fn _start() -> ! {
     print_string(45, 9, b"Pass");
 
     print_string(0, 10, b"Switch to IA-32e Mode");
-    unsafe {
-        kSwitchAndExecute64BitKernel();
-    }
+    unsafe { kSwitchAndExecute64BitKernel() };
     loop {}
 }
 

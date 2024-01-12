@@ -5,7 +5,7 @@ use spin::{Lazy, Mutex};
 
 use crate::{
     assembly::{InPortByte, OutPortByte},
-    println,
+    interrupt, println,
     types::StaticQueue,
     utility::set_interrupt_flag,
 };
@@ -477,22 +477,11 @@ pub fn ConvertScanCodeAndPutQueue(ScanCode: u8) -> bool {
     result
 }
 
-pub fn GetKeyFromKeyQueue(data: &mut KeyData) -> bool {
+pub fn GetKeyFromKeyQueue() -> Result<KeyData, ()> {
     unsafe {
         if KeyQueue.lock().is_empty() {
-            return true;
+            return Err(());
         }
-        let previous_interrupt = set_interrupt_flag(false);
-        let result = KeyQueue.lock().dequeue();
-        set_interrupt_flag(previous_interrupt);
-        match result {
-            Ok(res) => {
-                *data = res;
-                return true;
-            }
-            Err(()) => {
-                return false;
-            }
-        }
+        interrupt::without_interrupt(|| KeyQueue.lock().dequeue())
     }
 }

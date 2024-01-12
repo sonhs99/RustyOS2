@@ -10,14 +10,14 @@ use crate::{
 
 use self::round_robin::{RRScheduler, PRIORITY_WAIT};
 
-pub use idle::idle_process;
-pub use round_robin::{PRIORITY_HIGHIST, PRIORITY_LOWIST, PRIORITY_MIDDLE};
+pub use idle::{idle_process, process_load};
+pub use round_robin::{get_priority, PRIORITY_HIGHIST, PRIORITY_LOWIST, PRIORITY_MIDDLE};
 
 mod idle;
 mod round_robin;
 
 const PROCESS_REGISTERCOUNT: usize = 5 + 19;
-const PROCESS_MAXCOUNT: usize = 1024;
+pub(crate) const PROCESS_MAXCOUNT: usize = 1024;
 const PROCESS_POOLADDRESS: u64 = 0x800000;
 
 const PROCESS_STACKADDRESS: u64 =
@@ -25,7 +25,10 @@ const PROCESS_STACKADDRESS: u64 =
 const PROCESS_STACKSIZE: u64 = 8192;
 
 const PROCESS_INVALIDID: u64 = 0xFFFFFFFFFFFFFFFF;
-const PROCESS_ENDTASK: u64 = 0x8000000000000000;
+
+// flags
+const PROCESS_FLAG_ENDTASK: u64 = 0x8000000000000000;
+pub const PROCESS_FLAG_IDLETASK: u64 = 0x0800000000000000;
 
 #[repr(C, packed(1))]
 pub struct Context {
@@ -39,7 +42,7 @@ extern "C" {
 pub struct Process {
     pub context: Context,
     pub id: u64,
-    flags: u64,
+    pub flags: u64,
 
     stack: u64,
     stack_size: u64,
@@ -182,16 +185,14 @@ pub trait Scheduler {
     fn total_count(&self) -> u64;
 }
 
-// pub static SCHEDULER: Lazy<Mutex<StaticRRScheduler>> =
-//     Lazy::new(|| Mutex::new(StaticRRScheduler::new(PROCESS_POOL.lock().alloc().unwrap())));
-pub(crate) static mut SCHEDULER: RRScheduler = RRScheduler::new(0);
+pub(crate) static SCHEDULER: Lazy<Mutex<RRScheduler>> = Lazy::new(|| {
+    let first = unsafe { &mut *PROCESS_POOL.lock().alloc().unwrap() };
+    first.flags = PRIORITY_HIGHIST;
+    Mutex::new(RRScheduler::new(first.id & 0xFFFFFFFF))
+});
 
 pub fn init_scheduler() {
-    unsafe {
-        let first = &mut *PROCESS_POOL.lock().alloc().unwrap();
-        SCHEDULER.set_running(first.id & 0xFFFFFFFF);
-        first.flags = PRIORITY_HIGHIST;
-    }
+    black_box(SCHEDULER.lock());
 }
 
 pub fn create_task(flags: u64, entry: u64) -> Result<u64, ()> {
@@ -200,7 +201,7 @@ pub fn create_task(flags: u64, entry: u64) -> Result<u64, ()> {
         let stack_address = PROCESS_STACKADDRESS + (PROCESS_STACKSIZE * pid as u64);
         unsafe {
             (*process).set(flags, entry, stack_address, PROCESS_STACKSIZE);
-            if let Err(_) = SCHEDULER.add_ready_list(pid) {
+            if let Err(_) = interrupt::without_interrupt(|| SCHEDULER.lock().add_ready_list(pid)) {
                 return Err(());
             }
         }
@@ -212,16 +213,21 @@ pub fn create_task(flags: u64, entry: u64) -> Result<u64, ()> {
 
 pub fn schedule() {
     unsafe {
-        if let Some(next_id) = SCHEDULER.next() {
+        if let Some(next_id) = interrupt::without_interrupt(|| SCHEDULER.lock().next()) {
             let context_address =
                 (IST_STARTADDRESS + IST_SIZE) as u64 - size_of::<Context>() as u64;
-            let current_id = SCHEDULER.running();
+            let current_id = interrupt::without_interrupt(|| SCHEDULER.lock().running());
             let current = get_process_from_id(current_id).unwrap();
             let next = get_process_from_id(next_id).unwrap();
 
-            SCHEDULER.set_running(next_id);
+            interrupt::without_interrupt(|| SCHEDULER.lock().set_running(next_id));
 
-            if current.flags & PROCESS_ENDTASK == 0 {
+            if current.flags & PROCESS_FLAG_ENDTASK == 0 {
+                if current.flags & PROCESS_FLAG_IDLETASK != 0 {
+                    idle::IDLE_COUNT += 1;
+                }
+                idle::TICK_COUNT += 1;
+
                 memcpy(
                     &mut current.context as *mut Context as *mut u8,
                     context_address as *mut u8,
@@ -229,7 +235,7 @@ pub fn schedule() {
                 );
             }
 
-            SCHEDULER.add_ready_list(current_id);
+            interrupt::without_interrupt(|| SCHEDULER.lock().add_ready_list(current_id));
 
             memcpy(
                 context_address as *mut u8,
@@ -237,42 +243,44 @@ pub fn schedule() {
                 size_of::<Context>() as isize,
             );
         }
-        SCHEDULER.reset_processtime();
+        interrupt::without_interrupt(|| SCHEDULER.lock().reset_processtime());
     }
 }
 
 pub fn yield_next() {
-    interrupt::without_interrupt(|| unsafe {
-        if let Some(next_id) = SCHEDULER.next() {
-            let current_id = SCHEDULER.running();
-            let current = get_process_from_id(current_id).unwrap();
-            let next = get_process_from_id(next_id).unwrap();
+    if let Some(next_id) = interrupt::without_interrupt(|| SCHEDULER.lock().next()) {
+        let current_id = interrupt::without_interrupt(|| SCHEDULER.lock().running());
+        let current = get_process_from_id(current_id).unwrap();
+        let next = get_process_from_id(next_id).unwrap();
 
-            SCHEDULER.set_running(next_id);
-            SCHEDULER.add_ready_list(current_id);
-            if current.flags & PROCESS_ENDTASK != 0 {
-                context_switch(&*(0 as *const Context), &next.context);
-            } else {
-                context_switch(&current.context, &next.context);
+        interrupt::without_interrupt(|| SCHEDULER.lock().set_running(next_id));
+        interrupt::without_interrupt(|| SCHEDULER.lock().add_ready_list(current_id));
+        if current.flags & PROCESS_FLAG_ENDTASK != 0 {
+            unsafe { context_switch(&*(0 as *const Context), &next.context) };
+        } else {
+            if current.flags & PROCESS_FLAG_IDLETASK != 0 {
+                unsafe { idle::IDLE_COUNT += 1 };
             }
+            unsafe { idle::TICK_COUNT += 1 };
+            unsafe { context_switch(&current.context, &next.context) };
         }
-        SCHEDULER.reset_processtime();
-    });
+    }
+    interrupt::without_interrupt(|| SCHEDULER.lock().reset_processtime());
 }
 
 pub fn decrease_time() {
-    unsafe { SCHEDULER.decrease_time() };
+    interrupt::without_interrupt(|| SCHEDULER.lock().decrease_time())
 }
 
 pub fn is_expired() -> bool {
-    unsafe { SCHEDULER.is_expired() }
+    interrupt::without_interrupt(|| SCHEDULER.lock().is_expired())
 }
 
 pub fn get_pid() -> u64 {
-    unsafe { SCHEDULER.running() }
+    interrupt::without_interrupt(|| SCHEDULER.lock().running())
 }
 
-pub(crate) fn get_process_from_id<'a>(pid: u64) -> Option<&'a mut Process> {
+pub fn get_process_from_id<'a>(pid: u64) -> Option<&'a mut Process> {
     let pid = pid & 0xFFFFFFFF;
     if pid > PROCESS_MAXCOUNT as u64 {
         None
@@ -286,31 +294,35 @@ pub(crate) fn get_process_from_id<'a>(pid: u64) -> Option<&'a mut Process> {
 
 pub fn end_process(pid: u64) {
     let target = get_process_from_id(pid);
-    if unsafe { SCHEDULER.running() == pid } {
+    if interrupt::without_interrupt(|| SCHEDULER.lock().running()) == pid {
         let target = target.unwrap();
-        target.flags |= PROCESS_ENDTASK;
+        target.flags |= PROCESS_FLAG_ENDTASK;
         round_robin::set_priority(&mut target.flags, PRIORITY_WAIT);
         yield_next();
         loop {}
     } else if let Some(target) = target {
-        unsafe { SCHEDULER.remove_process(pid) };
-        target.flags |= PROCESS_ENDTASK;
+        interrupt::without_interrupt(|| SCHEDULER.lock().remove_process(pid));
+        target.flags |= PROCESS_FLAG_ENDTASK;
         round_robin::set_priority(&mut target.flags, PRIORITY_WAIT);
-        unsafe { SCHEDULER.add_ready_list(pid) };
+        interrupt::without_interrupt(|| SCHEDULER.lock().add_ready_list(pid));
     }
 }
 
+pub fn change_priority(pid: u64, priority: u64) -> Result<(), ()> {
+    interrupt::without_interrupt(|| SCHEDULER.lock().change_priority(pid, priority))
+}
+
 pub fn exit() {
-    end_process(unsafe { SCHEDULER.running() });
+    end_process(interrupt::without_interrupt(|| SCHEDULER.lock().running()));
 }
 
 pub fn process_count() -> u64 {
-    unsafe { SCHEDULER.total_count() }
+    interrupt::without_interrupt(|| SCHEDULER.lock().total_count())
 }
 
 pub fn is_process_exist(pid: u64) -> bool {
     match get_process_from_id(pid) {
-        Some(process) => process.id == pid,
+        Some(process) => process.id != pid,
         None => false,
     }
 }

@@ -66,6 +66,12 @@ pub fn entry() {
     console::set_curser(45, y);
     println!("Pass");
 
-    create_task(process::PRIORITY_LOWIST, process::idle_process as u64);
+    if let Err(()) = create_task(
+        process::PRIORITY_LOWIST | process::PROCESS_FLAG_IDLETASK,
+        process::idle_process as u64,
+    ) {
+        println!("Idle Task initalization Failed");
+        loop {}
+    };
     start_shell();
 }

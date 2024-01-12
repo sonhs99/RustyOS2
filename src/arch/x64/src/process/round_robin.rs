@@ -1,3 +1,5 @@
+use crate::{print, println};
+
 use super::{get_process_from_id, Scheduler, PROCESS_MAXCOUNT};
 
 const PROCESS_TIME: i64 = 5;
@@ -10,7 +12,7 @@ pub const PRIORITY_WAIT: u64 = 0xFF;
 
 static mut RUNQUEUE_POOL: [Option<u64>; PROCESS_MAXCOUNT] = [None; PROCESS_MAXCOUNT];
 
-pub(crate) fn get_priority(flag: u64) -> u64 {
+pub fn get_priority(flag: u64) -> u64 {
     flag & 0xFF
 }
 
@@ -73,6 +75,8 @@ impl Scheduler for RRScheduler {
         if let Some(ready) = get_process_from_id(ready_id) {
             let priority = get_priority(ready.flags);
             if priority == PRIORITY_WAIT {
+                // println!("{:?}", unsafe { RUNQUEUE_POOL[ready_id as usize] });
+                // self.ready[4].print();
                 self.wait.push_back(ready_id);
             } else if priority < PROCESS_READYLISTCOUNT as u64 {
                 self.ready[priority as usize].push_back(ready_id);
@@ -89,7 +93,7 @@ impl Scheduler for RRScheduler {
 
     fn remove_process(&mut self, pid: u64) -> Result<u64, ()> {
         if let Some(process) = super::get_process_from_id(pid) {
-            if pid == process.id {
+            if pid != process.id {
                 let priority = get_priority(process.flags);
                 self.ready[priority as usize].remove(pid)
             } else {
@@ -187,10 +191,16 @@ impl RunQueue {
             }
             None => return Err(()),
         };
+
         if self.tail.unwrap() == pid {
             self.tail = Some(node);
         }
-        unsafe { RUNQUEUE_POOL[node as usize] = None };
+        unsafe {
+            let next = RUNQUEUE_POOL[node as usize].unwrap();
+            RUNQUEUE_POOL[node as usize] = RUNQUEUE_POOL[next as usize];
+            RUNQUEUE_POOL[next as usize] = None;
+        };
+
         Ok(pid)
     }
 }

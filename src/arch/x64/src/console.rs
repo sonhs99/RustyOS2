@@ -184,9 +184,12 @@ pub fn clear_screen() {
 }
 
 pub fn getch() -> u8 {
-    let mut key_data: keyboard::KeyData = keyboard::KeyData::new();
     loop {
-        while !keyboard::GetKeyFromKeyQueue(&mut key_data) {}
+        let key_data = loop {
+            if let Ok(key) = keyboard::GetKeyFromKeyQueue() {
+                break key;
+            }
+        };
         if (key_data.Flags & keyboard::KeyStatement::KeyFlagsDown as u8) != 0 {
             return key_data.ASCIICode;
         }

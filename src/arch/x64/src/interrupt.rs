@@ -254,11 +254,12 @@ fn KeyboardHandler(vector: u8) {
     SendEOI((vector - pic::PIC_IRQSTARTVECTOR) as u16);
 }
 
-pub fn without_interrupt<F>(mut f: F)
+pub fn without_interrupt<F, T>(mut f: F) -> T
 where
-    F: FnMut(),
+    F: FnMut() -> T,
 {
     let previous_flag = set_interrupt_flag(false);
-    f();
+    let res = f();
     set_interrupt_flag(previous_flag);
+    res
 }

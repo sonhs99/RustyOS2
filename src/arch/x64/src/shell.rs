@@ -30,22 +30,22 @@ static COMMAND_TABLE: &[Command] = &[
     Command {
         command: "help",
         help: "Show Help",
-        command_function: sHelp,
+        command_function: show_help,
     },
     Command {
         command: "cls",
         help: "Clear Screen",
-        command_function: sCls,
+        command_function: cls,
     },
     Command {
         command: "totalram",
         help: "Show Total RAM Size",
-        command_function: sTotalRAMSize,
+        command_function: total_ram_size,
     },
     Command {
         command: "shutdown",
         help: "Shutdown And Reboot OS",
-        command_function: kShutdown,
+        command_function: shut_down,
     },
     Command {
         command: "settimer",
@@ -73,14 +73,24 @@ static COMMAND_TABLE: &[Command] = &[
         command_function: test_create_task,
     },
     Command {
-        command: "checktask",
-        help: "Check Task",
-        command_function: check_task,
+        command: "listtask",
+        help: "Get List of Task",
+        command_function: list_task,
     },
     Command {
-        command: "kill",
+        command: "killtask",
         help: "Kill Task",
         command_function: kill_task,
+    },
+    Command {
+        command: "changepriority",
+        help: "Change Process Priority",
+        command_function: change_priority,
+    },
+    Command {
+        command: "cpuload",
+        help: "Get CPU Load",
+        command_function: cpu_load,
     },
 ];
 
@@ -151,19 +161,20 @@ fn execute_command(buffer: &str) {
     }
 }
 
-fn sHelp(_args: &mut Parameter) {
+fn show_help(_args: &mut Parameter) {
     println!("\n      ---   Shell Command List   ---\n");
     for command in COMMAND_TABLE {
-        println!("{:10} {}", command.command, command.help);
+        println!("{:14} {}", command.command, command.help);
     }
 }
-fn sCls(_args: &mut Parameter) {
+fn cls(_args: &mut Parameter) {
     clear_screen();
+    println!();
 }
-fn sTotalRAMSize(_args: &mut Parameter) {
+fn total_ram_size(_args: &mut Parameter) {
     println!("Total RAM Size: {} MB", get_ram_size());
 }
-fn kShutdown(_args: &mut Parameter) {
+fn shut_down(_args: &mut Parameter) {
     println!("System Shutdown start...");
     println!("Press Any Key To Reboot PC");
     getch();
@@ -264,27 +275,14 @@ fn test_task() {
     let offset = 25 * 80 - (offset % (25 * 80));
     let data = [b'-', b'\\', b'|', b'/'];
     let vga = 0xb8000 as *mut u16;
-    // println!(
-    //     "[{:2X}] This is called from test_task, {}",
-    //     process::get_pid(),
-    //     i
-    // );
+
     loop {
-        // println!(
-        //     "[{:2X}] This is called from test_task, {}",
-        //     process::get_pid(),
-        //     i
-        // );
         let charactor = data[i % 4] as u16;
         let attribute = ((offset % 15) + 1) as u16;
         black_box(unsafe { *vga.offset(offset as isize) = charactor | attribute << 8 });
         i += 1;
+        // process::yield_next();
     }
-    // println!(
-    //     "[{:2X}] This is called from test_task in the end, {}",
-    //     process::get_pid(),
-    //     i
-    // );
 }
 
 fn test_create_task(args: &mut Parameter) {
@@ -302,35 +300,98 @@ fn test_create_task(args: &mut Parameter) {
         }
     };
     for _ in 0..count {
-        if let Err(_) = create_task(PRIORITY_HIGHIST, test_task as u64) {
+        if let Err(_) = create_task(PRIORITY_LOWIST, test_task as u64) {
             break;
         }
     }
 }
 
-fn check_task(_args: &mut Parameter) {
-    println!("Total Task: {}", process_count());
+fn list_task(_args: &mut Parameter) {
+    let mut count = 0;
+    println!("\n         ---      Task List      ---\n");
+    for pid in 0..process::PROCESS_MAXCOUNT as u64 {
+        if let Some(process) = process::get_process_from_id(pid) {
+            if process.id >> 32 != 0 {
+                if count != 0 && (count % 10) == 0 {
+                    print!("Press any key to continue ('q' is exit)");
+                    if getch() == b'q' {
+                        println!();
+                        break;
+                    }
+                    println!();
+                }
+                println!(
+                    "[{}] Task ID[0x{:X}], Priority[0x{:X}], Flags[0x{:X}]",
+                    count + 1,
+                    pid,
+                    process::get_priority(process.flags),
+                    process.flags
+                );
+                count += 1;
+            }
+        }
+    }
 }
 
 fn kill_task(args: &mut Parameter) {
-    let pid: u64 = match args.next() {
-        Some(string) => match string.parse() {
-            Ok(value) => value,
-            Err(_) => {
-                println!("kill [pid]");
-                return;
-            }
-        },
-        None => {
+    let pid = if let Some(string) = args.next() {
+        if let Ok(value) = string.parse() {
+            value
+        } else if let Ok(value) = u64::from_str_radix(&string[2..], 16) {
+            value
+        } else {
             println!("kill [pid]");
             return;
         }
+    } else {
+        println!("kill [pid]");
+        return;
     };
     if process::is_process_exist(pid) {
-        println!("there are no Process [0x{pid:X}]");
-    } else {
         process::end_process(pid);
+    } else {
+        println!("there are no Process [0x{pid:X}]");
     }
+}
+
+fn change_priority(args: &mut Parameter) {
+    let pid = if let Some(string) = args.next() {
+        if let Ok(value) = string.parse() {
+            value
+        } else if let Ok(value) = u64::from_str_radix(&string[2..], 16) {
+            value
+        } else {
+            println!("changepriority [pid] [priority]");
+            return;
+        }
+    } else {
+        println!("changepriority [pid] [priority]");
+        return;
+    };
+    let priority = if let Some(string) = args.next() {
+        if let Ok(value) = string.parse() {
+            value
+        } else {
+            println!("changepriority [pid] [priority]");
+            return;
+        }
+    } else {
+        println!("changepriority [pid] [priority]");
+        return;
+    };
+    if process::is_process_exist(pid) {
+        if let Err(()) = process::change_priority(pid, priority) {
+            println!("Cannot change priority");
+        } else {
+            println!("Change Process Priority ID[0x{pid:X}] Priority[{priority}]");
+        }
+    } else {
+        println!("There are no Process ID [0x{pid:X}]");
+    }
+}
+
+fn cpu_load(_args: &mut Parameter) {
+    println!("CPU Load: {}%", process::process_load());
 }
 
 impl<'a> Parameter<'a> {
